@@ -42,7 +42,7 @@ contract StdToken is SafeMath {
      event Approval(address indexed _owner, address indexed _spender, uint256 _value);
 
 // Functions:
-     function transfer(address _to, uint256 _value) onlyPayloadSize(2 * 32) returns(bool){
+     function transfer(address _to, uint256 _value) onlyPayloadSize(2 * 32) returns(bool) {
           require(0x0!=_to);
 
           balances[msg.sender] = safeSub(balances[msg.sender],_value);
@@ -52,7 +52,7 @@ contract StdToken is SafeMath {
           return true;
      }
 
-     function transferFrom(address _from, address _to, uint256 _value) returns(bool){
+     function transferFrom(address _from, address _to, uint256 _value) returns(bool) {
           require(0x0!=_to);
 
           balances[_to] = safeAdd(balances[_to],_value);
@@ -334,6 +334,8 @@ contract Gold is StdToken, CreatorEnabled {
      function getTotalBurnt() public constant returns (uint) {
           return totalBurnt; 
      }
+
+
 }
 
 contract IMNTP is StdToken {

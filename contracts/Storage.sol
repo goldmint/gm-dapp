@@ -31,7 +31,7 @@ contract SafeMath {
 contract CreatorEnabled {
      address public creator = 0x0;
 
-     modifier onlyCreator() { require(msg.sender==creator); _; }
+     modifier onlyCreator() { require(msg.sender == creator); _; }
 
      function changeCreator(address _to) public onlyCreator {
           creator = _to;
@@ -115,10 +115,10 @@ contract Storage is SafeMath, StringMover {
           controllerAddress = _newController;
      }
 
-     address public hotWalletTokenHolder = 0x0;
+     address public hotWalletAddress = 0x0;
 
-     function setHotWalletTokenHolderAddress(address _newHotWalletTokenHolderAddress) onlyController {
-          hotWalletTokenHolder = _newHotWalletTokenHolderAddress;
+     function setHotWalletAddress(address _address) onlyController {
+         hotWalletAddress = _address;
      }
 
 // Fields - 1
@@ -208,7 +208,7 @@ contract Storage is SafeMath, StringMover {
      }
 
     function addGoldTransaction(string _userId, int _amount) public onlyController returns(uint) {
-          require(0!=_amount);
+          require(0 != _amount);
 
           uint c = goldTxCounts[_userId];
 
@@ -389,12 +389,12 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
           stor.setControllerAddress(_newController);
      }
 
-     function setHotWalletTokenHolderAddress(address _newHotWalletTokenHolder) public onlyCreator {
-          stor.setHotWalletTokenHolderAddress(_newHotWalletTokenHolder);
+     function setHotWalletAddress(address _hotWalletAddress) public onlyCreator {
+         stor.setHotWalletAddress(_hotWalletAddress);
      }
 
-     function getHotWalletTokenHolderAddress() public constant returns (address) {
-          return stor.hotWalletTokenHolder(); 
+     function getHotWalletAddress() public constant returns (address) {
+          return stor.hotWalletAddress();
      }
 
      function changeFiatFeeContract(address _newFiatFee) public onlyCreator {
@@ -594,10 +594,21 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
     function processInternalRequest(string _userId, bool _isBuy, uint _amountCents, uint _centsPerGold) onlyCreator public {
         if (_isBuy) {
-            processBuyRequest(_userId, stor.hotWalletTokenHolder(), _amountCents, _centsPerGold);
+            processBuyRequest(_userId, getHotWalletAddress(), _amountCents, _centsPerGold);
         } else {
-            processSellRequest(_userId, stor.hotWalletTokenHolder(), _amountCents, _centsPerGold);
+            processSellRequest(_userId, getHotWalletAddress(), _amountCents, _centsPerGold);
         }
+    }
+
+    function transferGoldFromHotWallet(address _to, uint _value, string _userId) onlyCreator public {
+        
+        uint balance = getUserHotGoldBalance(_userId);
+        require(balance >= _value);
+
+        goldToken.burnTokens(getHotWalletAddress(), _value);
+        goldToken.issueTokens(_to, _value);
+
+        addGoldTransaction(_userId, -int(_value));
     }
 
 ////////
@@ -612,7 +623,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
      }
 
      function isHotWallet(address _address) internal returns(bool) {
-         return _address == stor.hotWalletTokenHolder();
+         return _address == getHotWalletAddress();
      }
 }
 

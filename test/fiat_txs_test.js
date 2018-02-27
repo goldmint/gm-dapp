@@ -14,6 +14,7 @@ var creator;
 var buyer;
 var buyer2;
 var buyer3;
+var buyer4;
 
 var goldmintTeamAddress;
 
@@ -35,7 +36,9 @@ var fiatContractAddress;
 var fiatContract;
 var fiatContractOld;
 
+
 var hotWalletTokenHolderAddress;
+
 
 eval(fs.readFileSync('./test/helpers/misc.js')+'');
 
@@ -53,7 +56,8 @@ describe('Fiat 1', function() {
                buyer2 = accounts[2];
                buyer3 = accounts[3];
                goldmintTeamAddress = accounts[4];
-               hotWalletTokenHolderAddress = accounts[5];
+               buyer4 = accounts[5];
+               hotWalletTokenHolderAddress = accounts[6];
 
                done();
           });
@@ -103,6 +107,22 @@ describe('Fiat 1', function() {
                }
           );
      });
+
+     it('should set new hot wallet token address',function(done){
+		// call old fiatContract 
+            fiatContract.setHotWalletAddress(
+			// new controller
+               hotWalletTokenHolderAddress,
+               {
+                    from: creator,               
+                    gas: 2900000 
+               },function(err,result){
+                    assert.equal(err,null);
+
+                    done();
+               }
+          );
+    });
 
      it('should not add doc',function(done){
           assert.equal(fiatContract.getDocCount(),0);
@@ -497,6 +517,10 @@ describe('Fiat 1', function() {
                     assert.equal(r[1],"xxx");
                     assert.equal(r[4],1);    // state
 
+                    var hotWalletBalance = goldContract.balanceOf(fiatContract.getHotWalletAddress());
+
+                    assert.equal(hotWalletBalance,0);  
+
                     done();
                }
           );
@@ -603,21 +627,7 @@ describe('Fiat 1', function() {
           );
      });
 
-     it('should set new hot wallet token address to storage',function(done){
-		// call old fiatContract 
-            fiatContract.setHotWalletTokenHolderAddress(
-			// new controller
-               hotWalletTokenHolderAddress,
-               {
-                    from: creator,               
-                    gas: 2900000 
-               },function(err,result){
-                    assert.equal(err,null);
 
-                    done();
-               }
-          );
-    });
 
      it('should add fiat tx 6', function(done) {
         var user = "hot-wallet";
@@ -641,11 +651,11 @@ describe('Fiat 1', function() {
         );
      });   
 
-     it('should process inner buy request',function(done) {
+    it('should process inner buy request',function(done) {
 
         var user = "hot-wallet";
 
-        var balanceBefore = goldContract.balanceOf(hotWalletTokenHolderAddress);
+        var balanceBefore = goldContract.balanceOf(fiatContract.getHotWalletAddress());
 
         // 20000 left only
         var amountCents = 100000;
@@ -667,14 +677,14 @@ describe('Fiat 1', function() {
                   assert.equal(fiatContract.getUserFiatBalance(user), 200000);
 
                   // GOLD balance should be increased
-                  var balance = goldContract.balanceOf(hotWalletTokenHolderAddress);
+                  var balance = goldContract.balanceOf(fiatContract.getHotWalletAddress());
                   // total bought was 2
                   assert.equal(balance, 2000000000000000000);
 
                   done();
              }
         );
-   });
+    });
 
     it('should add fiat tx 7', function(done) {
         var user = "hot-wallet-1";
@@ -702,7 +712,7 @@ describe('Fiat 1', function() {
 
         var user = "hot-wallet-1";
 
-        var balanceBefore = goldContract.balanceOf(hotWalletTokenHolderAddress);
+        var balanceBefore = goldContract.balanceOf(fiatContract.getHotWalletAddress());
 
         // 20000 left only
         var amountCents = 1000 * 100;
@@ -724,27 +734,25 @@ describe('Fiat 1', function() {
                   assert.equal(fiatContract.getUserFiatBalance(user), 2000 * 100);
 
                   // GOLD balance should be increased
-                  var balance = goldContract.balanceOf(hotWalletTokenHolderAddress);
+                  var balance = goldContract.balanceOf(fiatContract.getHotWalletAddress());
                   // total bought was 2
                   assert.equal(balance, 4000000000000000000);
 
                   done();
              }
         );
-   });
+    });
 
-    it('should process inner sell request',function(done) {
+ 
+    it('should process inner sell request 1',function(done) {
 
         var user = "hot-wallet-1";
 
         var balanceUserGoldBefore = fiatContract.getUserHotGoldBalance(user);
-        console.log("balanceUserGoldBefore: " + balanceUserGoldBefore);
 
         var balanceFiatBefore = fiatContract.getUserFiatBalance(user);
-        console.log("balanceFiatBefore: " + balanceFiatBefore);
 
-        var hotWalletGoldBalance = goldContract.balanceOf(hotWalletTokenHolderAddress);
-        console.log("hotWalletGoldBalance: " + hotWalletGoldBalance);
+        var hotWalletGoldBalance = goldContract.balanceOf(fiatContract.getHotWalletAddress());
 
 
         // 2000$ left only
@@ -767,10 +775,10 @@ describe('Fiat 1', function() {
                 //
                 assert.equal(fiatContract.getUserFiatBalance(user), 297000);
                 assert.equal(fiatContract.getUserHotGoldBalance(user), 0);
-                assert.equal(goldContract.balanceOf(hotWalletTokenHolderAddress), hotWalletGoldBalance - balanceUserGoldBefore);
+                assert.equal(goldContract.balanceOf(fiatContract.getHotWalletAddress()), hotWalletGoldBalance - balanceUserGoldBefore);
 
                 // GOLD balance should be increased
-                var balance = goldContract.balanceOf(hotWalletTokenHolderAddress);
+                var balance = goldContract.balanceOf(fiatContract.getHotWalletAddress());
                 // total bought was 2
                 assert.equal(balance, 2000000000000000000);
 
@@ -778,6 +786,62 @@ describe('Fiat 1', function() {
             }
         );
     });
+
+
+    it('should not process transfer from hot wallet',function(done) {
+        var user = "hot-wallet";
+
+        var balanceBefore = fiatContract.getUserHotGoldBalance(user);
+
+
+        fiatContract.transferGoldFromHotWallet(
+            buyer4,
+            balanceBefore,
+            user,
+            {
+                 from: buyer,               
+                 gas: 2900000 
+            },function(err,result){
+                 assert.notEqual(err,null);
+
+                 done();
+            }
+       );
+    });
+
+    it('should process transfer from hot wallet',function(done) {
+        var user = "hot-wallet";
+
+        var userBalanceBefore = fiatContract.getUserHotGoldBalance(user);
+        var hotWalletBalanceBefore = goldContract.balanceOf(fiatContract.getHotWalletAddress());
+
+
+        fiatContract.transferGoldFromHotWallet(
+            buyer4,
+            2000000000000000000,
+            user,
+            {
+                 from: creator,               
+                 gas: 2900000 
+            },function(err,result){
+                 assert.equal(err,null);
+
+                 assert.equal(fiatContract.getUserHotGoldBalance(user), 0);
+
+                 var buyerBalance = goldContract.balanceOf(buyer4);
+
+                 assert.equal(buyerBalance, 2000000000000000000);
+
+                 var hotWalletBalanceAfter = goldContract.balanceOf(fiatContract.getHotWalletAddress());
+
+                 assert.equal(hotWalletBalanceAfter, hotWalletBalanceBefore - 2000000000000000000);
+
+
+
+                 done();
+            }
+       );
+    });    
 });
 
 describe('Fiat 2 - change the controller', function() {
@@ -794,7 +858,7 @@ describe('Fiat 2 - change the controller', function() {
                buyer2 = accounts[2];
                buyer3 = accounts[3];
                goldmintTeamAddress = accounts[4];
-               hotWalletTokenHolderAddress = accounts[5];
+
                done();
           });
      });
