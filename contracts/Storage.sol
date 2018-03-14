@@ -121,6 +121,7 @@ contract Storage is SafeMath, StringMover {
          hotWalletAddress = _address;
      }
 
+
 // Fields - 1
      mapping(uint => string) docs;
      uint public docCount = 0;
@@ -359,10 +360,13 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
      IGold public goldToken;
      IGoldFiatFee public fiatFee;
 
+     address public ethDepositAddress = 0x0;
+
      event NewTokenBuyRequest(address indexed _from, string indexed _userId);
      event NewTokenSellRequest(address indexed _from, string indexed _userId);
      event RequestCancelled(uint indexed _reqId);
      event RequestProcessed(uint indexed _reqId);
+     event EthDeposited(uint indexed _requestId, address indexed _address, uint _ethValue);
 
      function StorageController(address _mntpContractAddress, address _goldContractAddress, address _storageAddress, address _fiatFeeContract) {
           creator = msg.sender;
@@ -383,6 +387,13 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
           fiatFee = IGoldFiatFee(_fiatFeeContract);
      }
 
+     function setEthDepositAddress(address _address) public onlyCreator {
+         ethDepositAddress = _address;
+     }
+
+     function getEthDepositAddress() public constant returns (address) {
+         return ethDepositAddress;
+     }
 
      // Only old controller can call setControllerAddress
      function changeController(address _newController) public onlyCreator {
@@ -453,21 +464,26 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
      }
 
      function getGoldTransaction(string _userId, uint _index) public constant returns(int) {
+          require(keccak256(_userId) != keccak256(""));
           return stor.getGoldTransaction(_userId, _index);
      }
 
      function getUserHotGoldBalance(string _userId) public constant returns(uint) {
+          require(keccak256(_userId) != keccak256(""));
           return stor.getUserHotGoldBalance(_userId);
      }
 
 // 4:
      function addBuyTokensRequest(string _userId, string _requestHash) public returns(uint) {
+          require(keccak256(_userId) != keccak256(""));
           NewTokenBuyRequest(msg.sender, _userId); 
           return stor.addBuyTokensRequest(msg.sender, _userId, _requestHash);
      }
 
      function addSellTokensRequest(string _userId, string _requestHash) public returns(uint) {
-          NewTokenSellRequest(msg.sender, _userId);
+        require(keccak256(_userId) != keccak256(""));
+        NewTokenSellRequest(msg.sender, _userId);
+
 		return stor.addSellTokensRequest(msg.sender, _userId, _requestHash);
      }
 
@@ -509,6 +525,8 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
      }
 
      function processBuyRequest(string _userId, address _userAddress, uint _amountCents, uint _centsPerGold) internal {
+          require(keccak256(_userId) != keccak256(""));
+
           uint userFiatBalance = getUserFiatBalance(_userId);
           require(userFiatBalance > 0);
 
@@ -549,6 +567,8 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
      }
 
      function processSellRequest(string _userId, address _userAddress, uint _amountCents, uint _centsPerGold) internal {
+          require(keccak256(_userId) != keccak256(""));
+
           uint tokens = (uint(_amountCents) * 1 ether) / _centsPerGold;
           uint tokenBalance = goldToken.balanceOf(_userAddress);
 
@@ -601,7 +621,8 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
     }
 
     function transferGoldFromHotWallet(address _to, uint _value, string _userId) onlyCreator public {
-        
+        require(keccak256(_userId) != keccak256(""));
+
         uint balance = getUserHotGoldBalance(_userId);
         require(balance >= _value);
 
@@ -625,5 +646,13 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
      function isHotWallet(address _address) internal returns(bool) {
          return _address == getHotWalletAddress();
      }
+
+///////
+    function depositEth(uint _requestId) public payable {
+
+        ethDepositAddress.transfer(msg.value);
+
+        EthDeposited(_requestId, msg.sender, msg.value);
+    }     
 }
 
