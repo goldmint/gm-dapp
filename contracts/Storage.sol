@@ -649,6 +649,8 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
 ///////
     function depositEth(uint _requestId) public payable {
+        //min deposit is 0.01 ETH
+        require(msg.value > 0.01 * 1 ether);
 
         ethDepositAddress.transfer(msg.value);
 

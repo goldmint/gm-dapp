@@ -1055,6 +1055,26 @@ describe('Fiat 2 - change the controller', function() {
         );
    });
 
+   it('should not deposit eth',function(done){
+    var balance1Before = parseInt(web3.eth.getBalance(buyer));
+    var depositAddressBalanceBefore = parseInt(web3.eth.getBalance(ethDepoistAddress));
+
+    console.log("balance1Before: " + balance1Before);
+    console.log("depositAddressBalanceBefore: " + depositAddressBalanceBefore);
+
+        fiatContract.depositEth(
+            0,
+            {
+                from: buyer,               
+                gas: 2900000,
+                value: 10000000000 
+            },function(err,result){
+                assert.notEqual(err,null);
+                
+                done();
+            }
+        );
+    });
 
    it('should deposit eth',function(done){
     var balance1Before = parseInt(web3.eth.getBalance(buyer));
@@ -1063,27 +1083,27 @@ describe('Fiat 2 - change the controller', function() {
     console.log("balance1Before: " + balance1Before);
     console.log("depositAddressBalanceBefore: " + depositAddressBalanceBefore);
 
-    fiatContract.depositEth(
-        0,
-         {
-              from: buyer,               
-              gas: 2900000,
-              value: 1000000000000000000  
-         },function(err,result){
-              assert.equal(err,null);
+        fiatContract.depositEth(
+            0,
+            {
+                from: buyer,               
+                gas: 2900000,
+                value: 1000000000000000000  
+            },function(err,result){
+                assert.equal(err,null);
 
-              var balance1After = web3.eth.getBalance(buyer);
-              var depositAddressBalanceAfter = web3.eth.getBalance(ethDepoistAddress);
+                var balance1After = web3.eth.getBalance(buyer);
+                var depositAddressBalanceAfter = web3.eth.getBalance(ethDepoistAddress);
 
-              console.log("balance1After: " + balance1After);
-              console.log("depositAddressBalanceAfter: " + depositAddressBalanceAfter);
+                console.log("balance1After: " + balance1After);
+                console.log("depositAddressBalanceAfter: " + depositAddressBalanceAfter);
 
-              //assert.equal(balance1After, balance1Before - 1000000000000000000);
-              assert.equal(depositAddressBalanceAfter, depositAddressBalanceBefore + 1000000000000000000);
+                //assert.equal(balance1After, balance1Before - 1000000000000000000);
+                assert.equal(depositAddressBalanceAfter, depositAddressBalanceBefore + 1000000000000000000);
 
-              done();
-         }
-    );
-});
+                done();
+            }
+        );
+    });
 
 });
