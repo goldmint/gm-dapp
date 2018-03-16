@@ -1070,7 +1070,7 @@ describe('Fiat 2 - change the controller', function() {
                 value: 10000000000 
             },function(err,result){
                 assert.notEqual(err,null);
-                
+
                 done();
             }
         );
@@ -1088,7 +1088,7 @@ describe('Fiat 2 - change the controller', function() {
             {
                 from: buyer,               
                 gas: 2900000,
-                value: 1000000000000000000  
+                value: 10000000000000000  
             },function(err,result){
                 assert.equal(err,null);
 
@@ -1099,7 +1099,7 @@ describe('Fiat 2 - change the controller', function() {
                 console.log("depositAddressBalanceAfter: " + depositAddressBalanceAfter);
 
                 //assert.equal(balance1After, balance1Before - 1000000000000000000);
-                assert.equal(depositAddressBalanceAfter, depositAddressBalanceBefore + 1000000000000000000);
+                assert.equal(depositAddressBalanceAfter, depositAddressBalanceBefore + 10000000000000000);
 
                 done();
             }
