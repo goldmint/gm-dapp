@@ -291,7 +291,7 @@ function deployGoldFeeContract(data,cb){
           assert.notEqual(source.length,0);
 
           assert.equal(err,null);
-
+          
           var output = solc.compile(source, 0); // 1 activates the optimiser
 
           //console.log('OUTPUT: ');
@@ -307,7 +307,7 @@ function deployGoldFeeContract(data,cb){
                {
                     from: creator, 
                     // should not exceed 5000000 for Kovan by default
-                    gas: 99950000,
+                    gas: 9995000000,
                     //gasPrice: 120000000000,
                     data: '0x' + bytecode
                }, 
