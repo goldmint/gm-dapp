@@ -639,18 +639,6 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
       addGoldTransaction(_userId, -int(_value));
     }
 
-    ///////
-    function sellGoldWithEth(uint _requestId, uint _amount) public {
-        require(_amount > 0);
-
-        uint tokenBalance = goldToken.balanceOf(msg.sender);
-
-        require(tokenBalance >= _amount);
-
-        burnGoldTokens(msg.sender, _amount);
-
-        GoldSoldWithEth(_requestId, msg.sender, _amount);
-    }
 
     // do not allow to send money to this contract...
     function() external payable {
