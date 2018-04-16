@@ -953,7 +953,7 @@ describe('Fiat 2 - change the controller', function() {
 				{
 					from: creator, 
 					// should not exceed 5000000 for Kovan by default
-					gas: 5995000,
+					gas: 599500000,
 					//gasPrice: 120000000000,
 					data: '0x' + bytecode
 				}, 
