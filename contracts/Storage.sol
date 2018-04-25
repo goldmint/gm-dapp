@@ -1,4 +1,4 @@
-pragma solidity ^0.4.23;
+pragma solidity ^0.4.19;
 
 contract IGold {
     
@@ -105,6 +105,14 @@ contract StringMover {
              bytesStringTrimmed[j] = bytesString[j];
         }
         return string(bytesStringTrimmed);
+    }
+}
+
+contract Storage1 is SafeMath, StringMover {
+    uint public docCount = 0;
+
+    function getDocCount() public constant returns (uint) {
+        return docCount;
     }
 }
 
@@ -252,6 +260,9 @@ contract Storage is SafeMath, StringMover {
     }
 
     function addBuyTokensRequest(address _who, string _userId, uint _reference, uint _amount) public onlyController returns(uint) {
+
+        return 123;
+        /*
         Request memory r;
         r.sender = _who;
         r.userId = _userId;
@@ -263,7 +274,7 @@ contract Storage is SafeMath, StringMover {
         requests[requestsCount] = r;
         uint out = requestsCount;
         requestsCount++;
-        return out;
+        return out;*/
     }
 
     function addSellTokensRequest(address _who, string _userId, uint _reference, uint _amount) public onlyController returns(uint) {
@@ -426,12 +437,16 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         goldIssueBurnFee = IGoldIssueBurnFee(_goldIssueBurnFeeAddress);
     }
 
+    function getStorAddress() public constant returns (address) {
+        return address(stor);
+    }
+
     function addDoc(string _ipfsDocLink) public onlyManagerOrCreator returns(uint) {
         return stor.addDoc(_ipfsDocLink);
     }
 
     function getDocCount() public constant returns (uint) {
-        return stor.docCount();
+        return stor.getDocCount();
     }
 
     function getDoc(uint _index) public constant returns (string) {
@@ -491,8 +506,9 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
     function addBuyTokensRequest(string _userId, uint _reference) public payable returns(uint) {
         require(keccak256(_userId) != keccak256(""));
         require(msg.value > 0);
-
+        
         emit TokenBuyRequest(msg.sender, _userId, _reference);
+        
         return stor.addBuyTokensRequest(msg.sender, _userId, _reference, msg.value);
     }
 

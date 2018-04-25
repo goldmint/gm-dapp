@@ -46,7 +46,7 @@ var unsoldContract;
 var foundersVestingContractAddress;
 var foundersVestingContract;
 
-eval(fs.readFileSync('./test/helpers/misc.js')+'');
+//eval(fs.readFileSync('./test/helpers/misc.js')+'');
 
 var ICO_TOTAL_SELLING_SHOULD_BE = 7000000 * 1000000000000000000;
 var FOUNDERS_BALANCE_SHOULD_BE = 2000000 * 1000000000000000000;

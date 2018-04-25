@@ -29,8 +29,8 @@ var goldFeeContract;
 var goldContractAddress;
 var goldContract;
 
-var goldFiatFeeContractAddress;
-var goldFiatFeeContract;
+var goldIssueBurnFeeContractAddress;
+var goldIssueBurnFeeContract;
 
 var fiatContractAddress;
 var fiatContract;
@@ -949,7 +949,7 @@ describe('Fiat 2 - change the controller', function() {
                 mntContractAddress,
 				goldContractAddress,
 				storageAddressWas,		// use old storage with new controller!
-                goldFiatFeeContractAddress,
+                goldIssueBurnFeeContractAddress,
 				{
 					from: creator, 
 					// should not exceed 5000000 for Kovan by default

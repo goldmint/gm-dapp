@@ -29,12 +29,15 @@ var goldFeeContract;
 var goldContractAddress;
 var goldContract;
 
-var goldFiatFeeContractAddress;
-var goldFiatFeeContract;
+var goldIssueBurnFeeContractAddress;
+var goldIssueBurnFeeContract;
 
-var fiatContractAddress;
-var fiatContract;
-var fiatContractOld;
+var storageContractAddress;
+var storageContract;
+
+var storageControllerContractAddress;
+var storageControllerContract;
+var storageControllerContractOld;
 
 
 var hotWalletTokenHolderAddress;
@@ -81,17 +84,49 @@ describe('ETH_REQ 1', function() {
                     deployGoldContract(data,function(err){
                          assert.equal(err,null);
 
-                         deployFiatFeeContract(data,function(err){
+                         deployGoldIssueBurnFeeContract(data,function(err){
                               assert.equal(err,null);
 
-                              deployStorageControllerContract(data,function(err){
+                             deployStorageContract(data,function(err){
                                    assert.equal(err,null);
 
-                                   done();
+                                    deployStorageControllerContract(data,function(err){
+                                        assert.equal(err,null);
+
+                                        done();
+                                    });
                               });
+
                          });
                     });
                });
           });
-     });     
+     });   
+
+ 
+
+     it('should add buy request', function(done){
+        console.log("getStorAddress: " + storageControllerContract.getDocCount());
+
+        done();
+        /*
+         storageControllerContract.addBuyTokensRequest("1", 1,
+               {
+                    from: buyer,               
+                    gas: 2900000000,
+                    value: 500000000000000000
+               },function(err,res){
+                    assert.equal(err,null);
+                    
+                    console.log(storageControllerContractAddress);
+                    
+                    var totalBalance = web3.eth.getBalance(storageControllerContractAddress);
+                    console.log(totalBalance);
+                    assert.equal(totalBalance,500000000000000000);
+
+                    done();
+               });
+
+               */
+     })  
 });

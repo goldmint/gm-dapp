@@ -342,9 +342,9 @@ function deployGoldFeeContract(data,cb){
      });
 }
 
-function deployFiatFeeContract(data,cb){
+function deployGoldIssueBurnFeeContract(data,cb){
      var file = './contracts/Storage.sol';
-     var contractName = ':GoldFiatFee';
+     var contractName = ':GoldIssueBurnFee';
 
      fs.readFile(file, function(err, result){
           assert.equal(err,null);
@@ -389,8 +389,8 @@ function deployFiatFeeContract(data,cb){
                          assert.equal(err, null);
                          assert.notEqual(result, null);
 
-                         goldFiatFeeContractAddress = result.contractAddress;
-                         goldFiatFeeContract = web3.eth.contract(abi).at(goldFiatFeeContractAddress);
+                         goldIssueBurnFeeContractAddress = result.contractAddress;
+                         goldIssueBurnFeeContract = web3.eth.contract(abi).at(goldIssueBurnFeeContractAddress);
 
                          if(!alreadyCalled){
                               alreadyCalled = true;
@@ -466,6 +466,69 @@ function deployMigrationContract(data,cb){
      });
 }
 
+function deployStorageContract(data,cb){
+     var file = './contracts/Storage.sol';
+     var contractName = ':Storage';
+
+     fs.readFile(file, function(err, result){
+          assert.equal(err,null);
+
+          var source = result.toString();
+          assert.notEqual(source.length,0);
+
+          assert.equal(err,null);
+
+          var output = solc.compile(source, 0); // 1 activates the optimiser
+
+          //console.log('OUTPUT: ');
+          //console.log(output.contracts);
+
+          var abi = JSON.parse(output.contracts[contractName].interface);
+          var bytecode = output.contracts[contractName].bytecode;
+          var tempContract = web3.eth.contract(abi);
+
+          var alreadyCalled = false;
+
+          tempContract.new(
+              {
+                    from: creator, 
+                    // should not exceed 5000000 for Kovan by default
+                    gas: 9995000,
+                    //gasPrice: 120000000000,
+                    data: '0x' + bytecode
+               }, 
+               function(err, c){
+                    assert.equal(err, null);
+
+                    console.log('TX HASH: ');
+                    console.log(c.transactionHash);
+
+                    // TX can be processed in 1 minute or in 30 minutes...
+                    // So we can not be sure on this -> result can be null.
+                    web3.eth.getTransactionReceipt(c.transactionHash, function(err, result){
+                         //console.log('RESULT: ');
+                         //console.log(result);
+
+                         assert.equal(err, null);
+                         assert.notEqual(result, null);
+
+                         storageContractAddress = result.contractAddress;
+                         storageContract = web3.eth.contract(abi).at(storageContractAddress);
+
+                         console.log('Storage Contract address: ');
+                         console.log(storageContractAddress);
+
+                         if(!alreadyCalled){
+                              alreadyCalled = true;
+
+                              return cb(null);
+                         }
+                    });
+               });
+     });
+}
+
+
 function deployStorageControllerContract(data,cb){
      var file = './contracts/Storage.sol';
      var contractName = ':StorageController';
@@ -492,8 +555,8 @@ function deployStorageControllerContract(data,cb){
           tempContract.new(
                mntContractAddress,
                goldContractAddress,
-               0,                   // create new storage
-               goldFiatFeeContractAddress,
+               storageContractAddress,                   // create new storage
+               goldIssueBurnFeeContractAddress,
                {
                     from: creator, 
                     // should not exceed 5000000 for Kovan by default
@@ -516,11 +579,11 @@ function deployStorageControllerContract(data,cb){
                          assert.equal(err, null);
                          assert.notEqual(result, null);
 
-                         fiatContractAddress = result.contractAddress;
-                         fiatContract = web3.eth.contract(abi).at(fiatContractAddress);
+                         storageControllerContractAddress = result.contractAddress;
+                         storageControllerContract = web3.eth.contract(abi).at(storageControllerContractAddress);
 
-                         console.log('Fiat Contract address: ');
-                         console.log(fiatContractAddress);
+                         console.log('Storage Controller Contract address: ');
+                         console.log(storageControllerContractAddress);
 
                          if(!alreadyCalled){
                               alreadyCalled = true;
