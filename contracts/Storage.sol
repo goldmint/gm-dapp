@@ -30,6 +30,26 @@ contract SafeMath {
         assert(b <= a);
         return a - b;
     }
+
+   function safeMul(uint256 a, uint256 b) internal pure returns (uint256 c) {
+        if (a == 0) {
+            return 0;
+        }
+        c = a * b;
+        assert(c / a == b);
+
+        return c;
+    }
+
+  /**
+  * @dev Integer division of two numbers, truncating the quotient.
+  */
+  function safeDiv(uint256 a, uint256 b) internal pure returns (uint256) {
+        // assert(b > 0); // Solidity automatically throws when dividing by 0
+        // uint256 c = a / b;
+        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+        return a / b;
+    }   
 }
 
 contract CreatorEnabled {
@@ -105,14 +125,6 @@ contract StringMover {
              bytesStringTrimmed[j] = bytesString[j];
         }
         return string(bytesStringTrimmed);
-    }
-}
-
-contract Storage1 is SafeMath, StringMover {
-    uint public docCount = 0;
-
-    function getDocCount() public constant returns (uint) {
-        return docCount;
     }
 }
 
@@ -261,8 +273,6 @@ contract Storage is SafeMath, StringMover {
 
     function addBuyTokensRequest(address _who, string _userId, uint _reference, uint _amount) public onlyController returns(uint) {
 
-        return 123;
-        /*
         Request memory r;
         r.sender = _who;
         r.userId = _userId;
@@ -274,7 +284,7 @@ contract Storage is SafeMath, StringMover {
         requests[requestsCount] = r;
         uint out = requestsCount;
         requestsCount++;
-        return out;*/
+        return out;
     }
 
     function addSellTokensRequest(address _who, string _userId, uint _reference, uint _amount) public onlyController returns(uint) {
@@ -347,29 +357,30 @@ contract GoldIssueBurnFee is CreatorEnabled, StringMover {
         gmUserId = _gmUserId;
     }
 
-    function calculateIssueGoldFee(uint _mntpBalance, uint _goldValue) public constant returns(uint) {
+    function calculateIssueGoldFee(uint _mntpBalance, uint _value) public constant returns(uint) {
         return 0;
     }
 
-    function calculateBurnGoldFee(uint _mntpBalance, uint _goldValue) public constant returns(uint) {
-        // If the sender holds 0 MNTP, then the transaction fee is 3% fiat,
-        // If the sender holds at least 10 MNTP, then the transaction fee is 2% fiat,
-        // If the sender holds at least 1000 MNTP, then the transaction fee is 1.5% fiat,
-        // If the sender holds at least 10000 MNTP, then the transaction fee is 1% fiat,
+    function calculateBurnGoldFee(uint _mntpBalance, uint _value) public constant returns(uint) {
+
+        // If the sender holds 0 MNTP, then the transaction fee is 3%,
+        // If the sender holds at least 10 MNTP, then the transaction fee is 2%,
+        // If the sender holds at least 1000 MNTP, then the transaction fee is 1.5%,
+        // If the sender holds at least 10000 MNTP, then the transaction fee is 1%,
         if (_mntpBalance >= (10000 * 1 ether)) {
-             return (75 * _goldValue / 10000);
+             return (75 * _value / 10000);
         }
 
         if (_mntpBalance >= (1000 * 1 ether)) {
-             return (15 * _goldValue / 1000);
+             return (15 * _value / 1000);
         }
 
         if (_mntpBalance >= (10 * 1 ether)) {
-             return (25 * _goldValue / 1000);
+             return (25 * _value / 1000);
         }
 
         // 3%
-        return (3 * _goldValue / 100);
+        return (3 * _value / 100);
     }
 }
 
@@ -389,8 +400,8 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
     address public managerAddress = 0x0;
 
-    event TokenBuyRequest(address indexed _from, string indexed _userId, uint indexed _reference);
-    event TokenSellRequest(address indexed _from, string indexed _userId, uint indexed _reference);
+    event TokenBuyRequest(address indexed _from, string indexed _userId, uint indexed _reference, uint _amount, uint _index);
+    event TokenSellRequest(address indexed _from, string indexed _userId, uint indexed _reference, uint _amount, uint _index);
     event RequestCancelled(uint indexed _index);
     event RequestProcessed(uint indexed _index);
     event RequestFailed(uint indexed _index);
@@ -435,10 +446,6 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
     function changeGoldIssueBurnFeeContract(address _goldIssueBurnFeeAddress) public onlyCreator {
         goldIssueBurnFee = IGoldIssueBurnFee(_goldIssueBurnFeeAddress);
-    }
-
-    function getStorAddress() public constant returns (address) {
-        return address(stor);
     }
 
     function addDoc(string _ipfsDocLink) public onlyManagerOrCreator returns(uint) {
@@ -506,10 +513,12 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
     function addBuyTokensRequest(string _userId, uint _reference) public payable returns(uint) {
         require(keccak256(_userId) != keccak256(""));
         require(msg.value > 0);
+
+        uint reqIndex = stor.addBuyTokensRequest(msg.sender, _userId, _reference, msg.value);
         
-        emit TokenBuyRequest(msg.sender, _userId, _reference);
+        TokenBuyRequest(msg.sender, _userId, _reference, msg.value, reqIndex);
         
-        return stor.addBuyTokensRequest(msg.sender, _userId, _reference, msg.value);
+        return reqIndex;
     }
 
     function addSellTokensRequest(string _userId, uint _reference, uint _amount) public returns(uint) {
@@ -522,9 +531,11 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
         burnGoldTokens(msg.sender, _amount);
 
-        emit TokenSellRequest(msg.sender, _userId, _reference);
+        uint reqIndex = stor.addSellTokensRequest(msg.sender, _userId, _reference, _amount);
 
-        return stor.addSellTokensRequest(msg.sender, _userId, _reference, _amount);
+        TokenSellRequest(msg.sender, _userId, _reference, _amount, reqIndex);
+
+        return reqIndex;
     }
 
     function getRequestsCount() public constant returns(uint) {
@@ -547,8 +558,25 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
     }
 
     function cancelRequest(uint _index) onlyManagerOrCreator public {
-        emit RequestCancelled(_index);
+
+        address sender;
+        string memory userId;
+        uint reference;
+        bool isBuy;
+        uint state;
+        uint amount;
+        (sender, userId, reference, isBuy, state, amount) = getRequest(_index);
+        require(0 == state);
+
+        if (isBuy) {
+            sender.transfer(amount);
+        } else {
+            goldToken.issueTokens(sender, amount);
+        }
+
         stor.cancelRequest(_index);
+
+        RequestCancelled(_index);
     }
 
     function processRequest(uint _index, uint _ethPerGold) onlyManagerOrCreator public {
@@ -571,34 +599,36 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
             processResult = processSellRequest(userId, sender, amount, _ethPerGold);
         }
 
+        return;
+
         if (processResult) {
             stor.setRequestProcessed(_index);
-            emit RequestProcessed(_index);
+            RequestProcessed(_index);
         } else {
             stor.setRequestFailed(_index);
-            emit RequestFailed(_index);
+            RequestFailed(_index);
         }
 
     }
 
-    function processBuyRequest(string _userId, address _userAddress, uint _amountEth, uint _ethPerGold) internal returns(bool) {
+    function processBuyRequest(string _userId, address _userAddress, uint _amountWei, uint _ethPerGold) internal returns(bool) {
         require(keccak256(_userId) != keccak256(""));
 
         uint userMntpBalance = mntpToken.balanceOf(_userAddress);
-        uint fee = goldIssueBurnFee.calculateIssueGoldFee(userMntpBalance, _amountEth);
-        require(_amountEth > fee);
-
+        uint fee = goldIssueBurnFee.calculateIssueGoldFee(userMntpBalance, _amountWei);
+        require(_amountWei > fee);
+        
         // issue tokens minus fee
-        uint amountEthMinusFee = _amountEth;
+        uint amountWeiMinusFee = _amountWei;
         if (fee > 0) {
-            amountEthMinusFee = safeSub(_amountEth, fee);
+            amountWeiMinusFee = safeSub(_amountWei, fee);
         }
 
-        require(amountEthMinusFee > 0);
-
-        uint tokens = (uint(amountEthMinusFee) * 1 ether) / _ethPerGold;
+        require(amountWeiMinusFee > 0);
+        
+        uint tokens = uint(amountWeiMinusFee) / _ethPerGold;
         issueGoldTokens(_userAddress, tokens);
-
+        
         // request from hot wallet
         if (isHotWallet(_userAddress)) {
             addGoldTransaction(_userId, int(tokens));
@@ -610,43 +640,35 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
     function processSellRequest(string _userId, address _userAddress, uint _amountToken, uint _ethPerGold) internal returns(bool) {
         require(keccak256(_userId) != keccak256(""));
 
-        uint tokenBalance = goldToken.balanceOf(_userAddress);
+        uint amountWei = safeMul(_amountToken, _ethPerGold);
 
-        if (isHotWallet(_userAddress)) {
-            tokenBalance = getUserHotGoldBalance(_userId);
-        }
-
-        if (tokenBalance < _amountToken) {
-            _amountToken = tokenBalance;
-        }
-
-        uint amountEth = uint((_amountToken * _ethPerGold) / 1 ether);
-
+        require(amountWei > 0);
         // request from hot wallet
         if (isHotWallet(_userAddress)) {
             // TODO: overflow
             addGoldTransaction(_userId, - int(_amountToken));
         }
-
+        
         // fee
         uint userMntpBalance = mntpToken.balanceOf(_userAddress);
-        uint fee = goldIssueBurnFee.calculateBurnGoldFee(userMntpBalance, amountEth);
-        require(amountEth > fee);
-
-        uint amountEthMinusFee = amountEth;
+        uint fee = goldIssueBurnFee.calculateBurnGoldFee(userMntpBalance, amountWei);
+        
+        require(amountWei > fee);
+        
+        uint amountWeiMinusFee = amountWei;
 
         if (fee > 0) {
-             amountEthMinusFee = safeSub(amountEth, fee);
+             amountWeiMinusFee = safeSub(amountWei, fee);
         }
 
-        require(amountEthMinusFee > 0);
+        require(amountWeiMinusFee > 0);
 
-        if (amountEthMinusFee > this.balance) {
+        if (amountWeiMinusFee > this.balance) {
             issueGoldTokens(_userAddress, _amountToken);
             return false;
         }
 
-        _userAddress.transfer(amountEthMinusFee);
+        _userAddress.transfer(amountWeiMinusFee);
 
         return true;
     }

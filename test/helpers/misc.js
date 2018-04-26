@@ -555,7 +555,7 @@ function deployStorageControllerContract(data,cb){
           tempContract.new(
                mntContractAddress,
                goldContractAddress,
-               storageContractAddress,                   // create new storage
+               0,                   // create new storage
                goldIssueBurnFeeContractAddress,
                {
                     from: creator, 
