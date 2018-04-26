@@ -115,7 +115,7 @@ describe('Fiat 1', function() {
                hotWalletTokenHolderAddress,
                {
                     from: creator,               
-                    gas: 2900000 
+                    gas: 290000000 
                },function(err,result){
                     assert.equal(err,null);
 
