@@ -41,9 +41,6 @@ contract SafeMath {
         return c;
     }
 
-  /**
-  * @dev Integer division of two numbers, truncating the quotient.
-  */
   function safeDiv(uint256 a, uint256 b) internal pure returns (uint256) {
         // assert(b > 0); // Solidity automatically throws when dividing by 0
         // uint256 c = a / b;
@@ -579,7 +576,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         RequestCancelled(_index);
     }
 
-    function processRequest(uint _index, uint _ethPerGold) onlyManagerOrCreator public {
+    function processRequest(uint _index, uint _ethWeiPerGold) onlyManagerOrCreator public {
         require(_index < getRequestsCount());
 
         address sender;
@@ -594,9 +591,9 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         bool processResult = true;
 
         if (isBuy) {
-            processResult = processBuyRequest(userId, sender, amount, _ethPerGold);
+            processResult = processBuyRequest(userId, sender, amount, _ethWeiPerGold);
         } else {
-            processResult = processSellRequest(userId, sender, amount, _ethPerGold);
+            processResult = processSellRequest(userId, sender, amount, _ethWeiPerGold);
         }
 
         return;
@@ -611,7 +608,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
     }
 
-    function processBuyRequest(string _userId, address _userAddress, uint _amountWei, uint _ethPerGold) internal returns(bool) {
+    function processBuyRequest(string _userId, address _userAddress, uint _amountWei, uint _ethWeiPerGold) internal returns(bool) {
         require(keccak256(_userId) != keccak256(""));
 
         uint userMntpBalance = mntpToken.balanceOf(_userAddress);
@@ -626,21 +623,23 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
         require(amountWeiMinusFee > 0);
         
-        uint tokens = uint(amountWeiMinusFee) / _ethPerGold;
-        issueGoldTokens(_userAddress, tokens);
+        uint tokensWei = safeDiv(uint(amountWeiMinusFee) * 1 ether, _ethWeiPerGold);
+        
+        issueGoldTokens(_userAddress, tokensWei);
         
         // request from hot wallet
         if (isHotWallet(_userAddress)) {
-            addGoldTransaction(_userId, int(tokens));
+            addGoldTransaction(_userId, int(tokensWei));
         }
 
         return true;
     }
 
-    function processSellRequest(string _userId, address _userAddress, uint _amountToken, uint _ethPerGold) internal returns(bool) {
+    function processSellRequest(string _userId, address _userAddress, uint _amountToken, uint _ethWeiPerGold) internal returns(bool) {
         require(keccak256(_userId) != keccak256(""));
 
-        uint amountWei = safeMul(_amountToken, _ethPerGold);
+        uint amountWei = safeMul(_amountToken, _ethWeiPerGold) / 1 ether;
+
 
         require(amountWei > 0);
         // request from hot wallet

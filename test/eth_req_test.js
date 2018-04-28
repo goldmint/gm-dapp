@@ -144,7 +144,7 @@ describe('ETH_REQ 1', function() {
 
      it('should process buy request', function(done){
 
-         storageControllerContract.processRequest(0, 2,
+         storageControllerContract.processRequest(0, 2000000000000000000,
             {
                   from: creator,               
                   gas: 2900000000
@@ -199,7 +199,7 @@ describe('ETH_REQ 1', function() {
 
             var commissionPercent = 0.03; // for 0 MNTP
             
-            var ethPerTokenRate = 2;  
+            var ethPerTokenRate = 2000000000000000000;  
 
             var mntpBalance  =  mntContract.balanceOf(buyer);
             
@@ -214,7 +214,7 @@ describe('ETH_REQ 1', function() {
             var initBuyerEthBalance = web3.eth.getBalance(buyer);
 
 
-            var requiredAmountWei = (amountTokenWeiToSell * (1-commissionPercent)) * ethPerTokenRate;
+            var requiredAmountWei = (amountTokenWeiToSell * (1-commissionPercent)) * ethPerTokenRate / 1000000000000000000;
 
             storageControllerContract.processRequest(1, ethPerTokenRate,
                   {
