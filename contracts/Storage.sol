@@ -1,7 +1,7 @@
 pragma solidity ^0.4.19;
 
 contract IGold {
-    
+
     function balanceOf(address _owner) public constant returns (uint256);
     function issueTokens(address _who, uint _tokens) public;
     function burnTokens(address _who, uint _tokens) public;
@@ -19,7 +19,7 @@ contract IMNTP { /*is StdToken */
 }
 
 contract SafeMath {
-    
+
     function safeAdd(uint a, uint b) internal returns (uint) {
         uint c = a + b;
         assert(c>=a && c>=b);
@@ -46,11 +46,11 @@ contract SafeMath {
         // uint256 c = a / b;
         // assert(a == b * c + a % b); // There is no case in which this doesn't hold
         return a / b;
-    }   
+    }
 }
 
 contract CreatorEnabled {
-    
+
     address public creator = 0x0;
 
     modifier onlyCreator() { require(msg.sender == creator); _; }
@@ -61,7 +61,7 @@ contract CreatorEnabled {
 }
 
 contract StringMover {
-    
+
     function stringToBytes32(string s) public constant returns(bytes32){
         bytes32 out;
         assembly {
@@ -127,7 +127,7 @@ contract StringMover {
 
 
 contract Storage is SafeMath, StringMover {
-    
+
     function Storage() public {
         controllerAddress = msg.sender;
     }
@@ -336,7 +336,7 @@ contract Storage is SafeMath, StringMover {
 }
 
 contract GoldIssueBurnFee is CreatorEnabled, StringMover {
-    
+
     string gmUserId = "";
 
     // Functions:
@@ -354,16 +354,20 @@ contract GoldIssueBurnFee is CreatorEnabled, StringMover {
         gmUserId = _gmUserId;
     }
 
-    function calculateIssueGoldFee(uint _mntpBalance, uint _value) public constant returns(uint) {
+    function calculateIssueGoldFee(uint _mntpBalance, uint _value, bool _forFiat) public constant returns(uint) {
         return 0;
     }
 
-    function calculateBurnGoldFee(uint _mntpBalance, uint _value) public constant returns(uint) {
+    function calculateBurnGoldFee(uint _mntpBalance, uint _value, bool _forFiat) public constant returns(uint) {
 
-        // If the sender holds 0 MNTP, then the transaction fee is 3%,
-        // If the sender holds at least 10 MNTP, then the transaction fee is 2%,
-        // If the sender holds at least 1000 MNTP, then the transaction fee is 1.5%,
-        // If the sender holds at least 10000 MNTP, then the transaction fee is 1%,
+        // if burn is for crypocurrencies, then fee is 0.1%
+        if (!_forFiat) return (1 * _value / 1000);
+
+
+        // If the sender holds 0 MNTP, then the fee is 3%,
+        // If the sender holds at least 10 MNTP, then the fee is 2%,
+        // If the sender holds at least 1000 MNTP, then the fee is 1.5%,
+        // If the sender holds at least 10000 MNTP, then the fee is 1%,
         if (_mntpBalance >= (10000 * 1 ether)) {
              return (75 * _value / 10000);
         }
@@ -382,14 +386,14 @@ contract GoldIssueBurnFee is CreatorEnabled, StringMover {
 }
 
 contract IGoldIssueBurnFee {
-    
+
     function getGoldmintFeeAccount()public constant returns(bytes32);
-    function calculateIssueGoldFee(uint _mntpBalance, uint _goldValue) public constant returns(uint);
-    function calculateBurnGoldFee(uint _mntpBalance, uint _goldValue) public constant returns(uint);
+    function calculateIssueGoldFee(uint _mntpBalance, uint _goldValue, bool _forFiat) public constant returns(uint);
+    function calculateBurnGoldFee(uint _mntpBalance, uint _goldValue, bool _forFiat) public constant returns(uint);
 }
 
 contract StorageController is SafeMath, CreatorEnabled, StringMover {
-    
+
     Storage public stor;
     IMNTP public mntpToken;
     IGold public goldToken;
@@ -512,9 +516,9 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         require(msg.value > 0);
 
         uint reqIndex = stor.addBuyTokensRequest(msg.sender, _userId, _reference, msg.value);
-        
+
         TokenBuyRequest(msg.sender, _userId, _reference, msg.value, reqIndex);
-        
+
         return reqIndex;
     }
 
@@ -546,7 +550,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         bool buy;
         uint8 state;
         uint amount;
-        
+
         (sender, userIdBytes, reference, buy, state, amount) = stor.getRequest(_index);
 
         string memory userId = bytes32ToString(userIdBytes);
@@ -596,8 +600,6 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
             processResult = processSellRequest(userId, sender, amount, _ethWeiPerGold);
         }
 
-        return;
-
         if (processResult) {
             stor.setRequestProcessed(_index);
             RequestProcessed(_index);
@@ -612,9 +614,9 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         require(keccak256(_userId) != keccak256(""));
 
         uint userMntpBalance = mntpToken.balanceOf(_userAddress);
-        uint fee = goldIssueBurnFee.calculateIssueGoldFee(userMntpBalance, _amountWei);
+        uint fee = goldIssueBurnFee.calculateIssueGoldFee(userMntpBalance, _amountWei, false);
         require(_amountWei > fee);
-        
+
         // issue tokens minus fee
         uint amountWeiMinusFee = _amountWei;
         if (fee > 0) {
@@ -622,11 +624,11 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         }
 
         require(amountWeiMinusFee > 0);
-        
+
         uint tokensWei = safeDiv(uint(amountWeiMinusFee) * 1 ether, _ethWeiPerGold);
-        
+
         issueGoldTokens(_userAddress, tokensWei);
-        
+
         // request from hot wallet
         if (isHotWallet(_userAddress)) {
             addGoldTransaction(_userId, int(tokensWei));
@@ -647,13 +649,13 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
             // TODO: overflow
             addGoldTransaction(_userId, - int(_amountToken));
         }
-        
+
         // fee
         uint userMntpBalance = mntpToken.balanceOf(_userAddress);
-        uint fee = goldIssueBurnFee.calculateBurnGoldFee(userMntpBalance, amountWei);
-        
+        uint fee = goldIssueBurnFee.calculateBurnGoldFee(userMntpBalance, amountWei, false);
+
         require(amountWei > fee);
-        
+
         uint amountWeiMinusFee = amountWei;
 
         if (fee > 0) {
@@ -696,15 +698,15 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
     function withdrawEth(address _userAddress, uint _value) onlyManagerOrCreator public {
         require(_value >= 0.1 * 1 ether);
-        
+
         if (this.balance < _value) _value = this.balance;
-        
+
         _userAddress.transfer(this.balance);
     }
-    
+
     function withdrawTokens(address _userAddress, uint _value) onlyManagerOrCreator public {
         burnGoldTokens(address(this), _value);
-        
+
         issueGoldTokens(_userAddress, _value);
     }
 
