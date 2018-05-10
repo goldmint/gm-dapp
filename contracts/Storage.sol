@@ -580,7 +580,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         RequestCancelled(_index);
     }
 
-    function processRequest(uint _index, uint _ethWeiPerGold) onlyManagerOrCreator public {
+    function processRequest(uint _index, uint _ethWeiPerGold) onlyManagerOrCreator public returns(bool) {
         require(_index < getRequestsCount());
 
         address sender;
@@ -608,6 +608,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
             RequestFailed(_index);
         }
 
+        return processResult;
     }
 
     function processBuyRequest(string _userId, address _userAddress, uint _amountWei, uint _ethWeiPerGold) internal returns(bool) {
