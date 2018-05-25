@@ -68,6 +68,7 @@ describe('ETH_REQ 1', function() {
           done();
      });
 
+
      it('should deploy token contract',function(done){
           var data = {};
 
@@ -197,7 +198,7 @@ describe('ETH_REQ 1', function() {
 
             var amountTokenWeiToSell = 150000000000000000;
 
-            var commissionPercent = 0.03; // for 0 MNTP
+            var commissionPercent = 0.001; // for 0 MNTP
             
             var ethPerTokenRate = 2000000000000000000;  
 
@@ -206,7 +207,7 @@ describe('ETH_REQ 1', function() {
 
             console.log("mntpBalance: " + mntpBalance); // 0 MNTP
 
-            var commission = goldIssueBurnFeeContract.calculateBurnGoldFee(mntpBalance, amountTokenWeiToSell);
+            var commission = goldIssueBurnFeeContract.calculateBurnGoldFee(mntpBalance, amountTokenWeiToSell, false);
 
             assert.equal(commission.toString(10), (amountTokenWeiToSell * commissionPercent).toString(10));
 
@@ -320,5 +321,109 @@ describe('ETH_REQ 1', function() {
 
                   done();
             });
-      });      
+      });   
+
+
+
+      it('should process fiat buy request', function(done){
+
+            var buyerBalanceBefore = goldContract.balanceOf(buyer3);
+            var cents = 500;
+            var centsPerGold = 500 * 2;
+
+            storageControllerContract.processBuyRequestFiat("123123", 5, buyer3, cents, centsPerGold,
+            {
+                  from: creator,               
+                  gas: 2900000000
+            },function(err,res){
+                  assert.equal(err,null);
+
+                  var buyerBalanceAfter = goldContract.balanceOf(buyer3);                  
+                  
+                  assert.equal((buyerBalanceAfter - buyerBalanceBefore).toString(10), (1000000000000000000 * cents / centsPerGold).toString(10));
+
+
+                  done();
+            });
+      });   
+
+
+       it('should add sell request 3', function(done){
+
+            var initBuyerBalance = goldContract.balanceOf(buyer3);
+            var amount = 150000000000000000;
+
+            storageControllerContract.addSellTokensRequest("2", 5, amount,
+            {
+                  from: buyer3,               
+                  gas: 2900000000
+            },function(err,res){
+                  assert.equal(err,null);
+                                    
+                  var buyerBalance = goldContract.balanceOf(buyer3);
+                  assert.equal(buyerBalance.toString(10), (initBuyerBalance - amount).toString(10));
+                  //assert.equal(storageControllerContract.getRequestsCount(), 4);
+                  done();
+            });
+      }); 
+
+      it('should process fiat sell request', function(done){
+
+            var amountTokenWeiToSell = 150000000000000000;
+
+            var commissionPercent = 0.03; // for 0 MNTP
+            
+            var centsPerGold = 15000;  
+
+            var mntpBalance  =  mntContract.balanceOf(buyer3);
+            
+
+            console.log("mntpBalance: " + mntpBalance); // 0 MNTP
+
+            var commission = goldIssueBurnFeeContract.calculateBurnGoldFee(mntpBalance, amountTokenWeiToSell, true);
+
+            assert.equal(commission.toString(10), (amountTokenWeiToSell * commissionPercent).toString(10));
+
+
+            var initBuyerEthBalance = web3.eth.getBalance(buyer);
+
+
+            var requiredAmountCentsWoCom = ((amountTokenWeiToSell / 1000000000000000000)) * centsPerGold;
+            console.log("requiredAmountCentsW/oCom: " + requiredAmountCentsWoCom);
+
+            var requiredAmountCentsWCom = Math.floor(requiredAmountCentsWoCom * (1-commissionPercent));
+            console.log("requiredAmountCentsWCom: " + requiredAmountCentsWCom);
+
+            var reqIndex = storageControllerContract.getRequestsCount() - 1;
+
+            console.log("reqIndex: " + reqIndex);
+
+            storageControllerContract.processSellRequestFiat(reqIndex, centsPerGold,
+            {
+                  from: creator,               
+                  gas: 2900000000
+            },function(err,res){
+                  assert.equal(err,null);
+
+                  var reqBaseInfo = storageControllerContract.getRequestBaseInfo(reqIndex);
+                  assert.equal(reqBaseInfo[3].toString(10), requiredAmountCentsWCom.toString(10));
+
+
+                  var req = storageControllerContract.getRequest(reqIndex);
+                        
+                  assert.equal(req[0], buyer3);
+                  assert.equal(req[1], "2");
+                  assert.equal(req[2], 5);
+                  assert.equal(req[3], false);
+                  assert.equal(req[4], 1);
+                  assert.equal(req[5], amountTokenWeiToSell);
+
+
+                  done();
+            });
+
+
+      })
+
+
 });
