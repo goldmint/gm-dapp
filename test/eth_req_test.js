@@ -251,8 +251,8 @@ describe('ETH_REQ 1', function() {
                   var balanceAfter = web3.eth.getBalance(storageControllerContractAddress);
                   
                   assert.equal((balanceAfter - balanceBefore).toString(10),amount.toString(10));
-
-                  assert.equal(storageControllerContract.getRequestsCount(), 3);
+                  
+                  assert.equal(storageControllerContract.getRequestsCount().toString(10), "3");
 
                   done();
             });

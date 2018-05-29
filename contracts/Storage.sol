@@ -417,9 +417,6 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
     event RequestProcessed(uint indexed _index);
     event RequestFailed(uint indexed _index);
 
-    event RequestProcessed(uint indexed _index, bool _isBuyRequest, bool _isFiat, uint _amount, uint _rate);
-
-
     modifier onlyManagerOrCreator() { require(msg.sender == managerAddress || msg.sender == creator); _; }
 
     function StorageController(address _mntpContractAddress, address _goldContractAddress, address _storageAddress, address _goldIssueBurnFeeContract) public {
@@ -477,28 +474,6 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         return bytes64ToString(x,y);
     }
 
-
-    // _amountCents can be negative
-    // returns index in user array
-    function addFiatTransaction(string _userId, int _amountCents) public onlyManagerOrCreator returns(uint) {
-        return stor.addFiatTransaction(_userId, _amountCents);
-    }
-
-    function getFiatTransactionsCount(string _userId) public constant returns (uint) {
-        return stor.getFiatTransactionsCount(_userId);
-    }
-
-    function getAllFiatTransactionsCount() public constant returns (uint) {
-        return stor.getAllFiatTransactionsCount();
-    }
-
-    function getFiatTransaction(string _userId, uint _index) public constant returns(int) {
-        return stor.getFiatTransaction(_userId, _index);
-    }
-
-    function getUserFiatBalance(string _userId) public constant returns(uint) {
-        return stor.getUserFiatBalance(_userId);
-    }
 
     function addGoldTransaction(string _userId, int _amount) public onlyManagerOrCreator returns(uint) {
         return stor.addGoldTransaction(_userId, _amount);
