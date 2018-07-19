@@ -750,7 +750,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
         if (this.balance < _value) _value = this.balance;
 
-        _userAddress.transfer(this.balance);
+        _userAddress.transfer(_value);
     }
 
     function withdrawTokens(address _userAddress, uint _value) onlyManagerOrCreator public {
@@ -772,5 +772,9 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
     function isHotWallet(address _address) internal returns(bool) {
        return _address == getHotWalletAddress();
+    }
+
+         // Default fallback function
+    function() payable {
     }
 }

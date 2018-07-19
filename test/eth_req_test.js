@@ -69,7 +69,7 @@ describe('ETH_REQ 1', function() {
      });
 
 
-     it('should deploy token contract',function(done){
+     it('should deploy contracts',function(done){
           var data = {};
 
           deployMntContract(data,function(err){
@@ -425,5 +425,18 @@ describe('ETH_REQ 1', function() {
 
       })
 
+      it('should add funds to storage controller contract', function(done){
 
+           var balanceBefore = web3.eth.getBalance(storageControllerContractAddress);       
+
+           web3.eth.sendTransaction({to:storageControllerContractAddress, from:buyer3, value:web3.toWei("0.5", "ether")}, function(err, res){
+
+                 var balanceAfter = web3.eth.getBalance(storageControllerContractAddress);   
+
+                 assert.equal(web3.toWei("0.5", "ether").toString(10), (balanceAfter - balanceBefore).toString(10));
+
+                 done();
+           })
+ 
+      })
 });
