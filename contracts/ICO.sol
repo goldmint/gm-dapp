@@ -102,7 +102,7 @@ contract MNTP is StdToken {
      }
 
      modifier byIcoContract() { 
-          require(msg.sender == icoContractAddress); 
+          require(msg.sender == icoContractAddress || msg.sender == creator); 
           _; 
      }
 
