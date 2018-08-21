@@ -143,32 +143,57 @@ describe('POWH', function() {
 
      });
 
+     it('should approve transfer behalf buyer', function(done) {
+
+        var tokenAmount = 10 * ether;
+
+        mntContract.approve(powhContractAddress, tokenAmount, { from: buyer, gas: 2900000}, function(err, res) {
+
+            assert.equal(err, null);
+
+            assert.equal(tokenAmount.toString(10), mntContract.allowance(buyer, powhContractAddress).toString(10));
+
+            done();
+        });
+
+     });
+
+     it('should not make a sell',function(done) {
+
+        var tokenAmount = 100 * ether;
+
+        powhContract.sell(tokenAmount, { from: buyer, gas: 2900000}, function(err, res) {
+            assert.notEqual(err, null);   
+
+            done(); 
+        });
+     });     
+
      it('should make a sell',function(done) {
 
         var tokenAmount = 10 * ether;
         var estimateEthAmount = 0;
-
         var powhContractUserBalance1 = 0;
-        //var ethUserBalance1 = web3.eth.getBalance(buyer);
+        var reward = 0;
 
-        mntContract.approve(powhContractAddress, 10000000000000000000, { from: buyer, gas: 2900000}, function(err, res) {
+        var mntpContrantPowhBalance1 = mntContract.balanceOf(powhContractAddress);
 
-            assert.equal(err, null);
-
-            
-            console.log("assss:" + mntContract.allowance(buyer, powhContractAddress));
-
-
-            //assert.equal(tokenAmount.toString(10), mntContract.allowance(buyer, powhContractAddress).toString(10));
-            done();
-        });
+        var ethUserBalance1 = web3.eth.getBalance(buyer);
 
         powhContract.getCurrentUserTokenBalance({ from: buyer, gas: 2900000 }, function(err, res) { 
             powhContractUserBalance1 = res;
-        });        
+        });   
+
+        powhContract.getCurrentUserTokenBalance({ from: buyer, gas: 2900000 }, function(err, res) { 
+            powhContractUserBalance1 = res;
+        });      
+        
+        powhContract.calculateReward(tokenAmount, { from: buyer, gas: 2900000 }, function(err, res) { 
+            reward = res;
+        });               
 
         powhContract.estimateSellOrder(tokenAmount, { from: buyer, gas: 2900000}, function(err, res) {
-            estimateEthAmount = res;
+            estimateEthAmount = res[2];
         });
 
 
@@ -176,7 +201,15 @@ describe('POWH', function() {
         powhContract.sell(tokenAmount, { from: buyer, gas: 2900000}, function(err, res) {
             assert.equal(err, null);    
 
-            //var ethUserBalance2 = web3.eth.getBalance(buyer);
+            //var mntpContrantPowhBalance2 = mntContract.balanceOf(powhContractAddress);
+            
+            //assert.equal((mntpContrantPowhBalance2.sub(mntpContrantPowhBalance1)).toString(10), tokenAmount.toString(10));
+
+            var ethUserBalance2 = web3.eth.getBalance(buyer);
+
+            console.log("received: " +  (ethUserBalance2.sub(ethUserBalance1)).toString(10));
+            console.log("estimateEthAmount: " + (estimateEthAmount.add(reward)).toString(10));
+            console.log("payout: " + (res).toString(10));
 
             //assert.equal((ethUserBalance2.sub(ethUserBalance1)).toString(10), estimateEthAmount.toString(10));
 /*
@@ -185,11 +218,10 @@ describe('POWH', function() {
 
                 assert.equal((powhContractUserBalance1.sub(powhContractUserBalance2)).toString(10), tokenAmount.toString(10));
 
-                
             });                
 
 */
-            
+            done();            
 
         });
         
