@@ -116,7 +116,7 @@ describe('POWH', function() {
 
 
         powhContract.estimateBuyOrder(ethAmount, { from: buyer, gas: 2900000}, function(err, res) {
-            estimateTokenAmount = res;
+            estimateTokenAmount = res[0];
         });
 
 
@@ -178,8 +178,6 @@ describe('POWH', function() {
 
         var mntpContrantPowhBalance1 = mntContract.balanceOf(powhContractAddress);
 
-        var ethUserBalance1 = web3.eth.getBalance(buyer);
-
         powhContract.getCurrentUserTokenBalance({ from: buyer, gas: 2900000 }, function(err, res) { 
             powhContractUserBalance1 = res;
         });   
@@ -193,26 +191,28 @@ describe('POWH', function() {
         });               
 
         powhContract.estimateSellOrder(tokenAmount, { from: buyer, gas: 2900000}, function(err, res) {
-            estimateEthAmount = res[2];
+            estimateEthAmount = res[0];
         });
 
 
+        var ethPowhContractBalance1 = web3.eth.getBalance(powhContractAddress);
+        var ethBuyerBalance1 = web3.eth.getBalance(buyer);
 
         powhContract.sell(tokenAmount, { from: buyer, gas: 2900000}, function(err, res) {
             assert.equal(err, null);    
 
-            //var mntpContrantPowhBalance2 = mntContract.balanceOf(powhContractAddress);
+            var mntpContrantPowhBalance2 = mntContract.balanceOf(powhContractAddress);
             
-            //assert.equal((mntpContrantPowhBalance2.sub(mntpContrantPowhBalance1)).toString(10), tokenAmount.toString(10));
+            assert.equal((mntpContrantPowhBalance2.sub(mntpContrantPowhBalance1)).toString(10), tokenAmount.toString(10));
 
-            var ethUserBalance2 = web3.eth.getBalance(buyer);
+            var ethPowhContractBalance2 = web3.eth.getBalance(powhContractAddress);
+            var ethBuyerBalance2 = web3.eth.getBalance(buyer);
 
-            console.log("received: " +  (ethUserBalance2.sub(ethUserBalance1)).toString(10));
-            console.log("estimateEthAmount: " + (estimateEthAmount.add(reward)).toString(10));
-            console.log("payout: " + (res).toString(10));
+            assert.equal((ethPowhContractBalance1.sub(ethPowhContractBalance2)).toString(10), estimateEthAmount.toString(10));
 
-            //assert.equal((ethUserBalance2.sub(ethUserBalance1)).toString(10), estimateEthAmount.toString(10));
-/*
+            assert.equal(ethBuyerBalance2.sub(ethBuyerBalance1).sub(estimateEthAmount) < 10000000000, true);
+
+
             powhContract.getCurrentUserTokenBalance({ from: buyer, gas: 2900000 }, function(err, res) { 
                 var powhContractUserBalance2 = res;
 
@@ -220,7 +220,7 @@ describe('POWH', function() {
 
             });                
 
-*/
+
             done();            
 
         });
