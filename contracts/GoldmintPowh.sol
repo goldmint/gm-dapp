@@ -9,7 +9,7 @@ contract GoldmintPowh {
     uint8 constant internal TOTAL_FEE_PERCENT = 10;
 
     uint8 constant internal DEV_REWARD_PERCENT = 40;
-    uint8 constant internal SHARE_REWARD_PERCENT = 30;
+    uint8 constant internal MNTP_REWARD_PERCENT = 30;
     uint8 constant internal REF_BONUS_PERCENT = 20;
     uint8 constant internal BIG_PROMO_PERCENT = 5;
     uint8 constant internal QUICK_PROMO_PERCENT = 5;
@@ -34,6 +34,7 @@ contract GoldmintPowh {
     mapping(bytes32 => bool) public _administrators;
     
     uint256 internal _bonusPerMntp;
+    uint256 internal _devReward;
     
     event onTokenPurchase(
         address indexed customerAddress,
@@ -67,7 +68,7 @@ contract GoldmintPowh {
     
     // only people with profits
     modifier onlyRewardOwners() {
-        require(userReward(true) > 0);
+        require(getUserReward(true) > 0);
         _;
     }
     
@@ -111,7 +112,7 @@ contract GoldmintPowh {
      */
     function reinvest() onlyRewardOwners() public {
         // fetch reward
-        uint256 reward = userReward(false); // retrieve ref. bonus later in the code
+        uint256 reward = getUserReward(false); // retrieve ref. bonus later in the code
         
         // pay out the reward virtually
         _rewardPayouts[msg.sender] +=  (int256) (reward * MAGNITUDE);
@@ -131,7 +132,7 @@ contract GoldmintPowh {
      * Withdraws all of the callers earnings.
      */
     function withdraw() onlyRewardOwners() public {
-        uint256 reward = userReward(false); // get ref. bonus later in the code
+        uint256 reward = getUserReward(false); // get ref. bonus later in the code
         
         // update dividend tracker
         _rewardPayouts[msg.sender] +=  (int256) (reward * MAGNITUDE);
@@ -161,7 +162,7 @@ contract GoldmintPowh {
 
         msg.sender.transfer(payout);
         
-        addProfitPerShare(totalFeeEth);
+        distributeFee(totalFeeEth);
         
         onTokenSell(msg.sender, tokenAmount, payout);
     }   
@@ -169,6 +170,31 @@ contract GoldmintPowh {
 
 
     /* HELPERS */
+
+    function getTotalFeePercent() public pure returns(uint256) {
+        return TOTAL_FEE_PERCENT;
+    }
+
+    function getDevRewardPercent() public pure returns(uint256) {
+        return DEV_REWARD_PERCENT;
+    }
+
+    function getShareRewardPercent() public pure returns(uint256) {
+        return MNTP_REWARD_PERCENT;
+    }   
+
+    function getRefBonusPercent() public pure returns(uint256) {
+        return REF_BONUS_PERCENT;
+    }   
+
+    function getBigPromoPercent() public pure returns(uint256) {
+        return BIG_PROMO_PERCENT;
+    }   
+
+    function getQuickPromoPercent() public pure returns(uint256) {
+        return QUICK_PROMO_PERCENT;
+    }  
+
     function getTotalEthBalance() public view returns(uint256) {
         return this.balance;
     }
@@ -191,13 +217,16 @@ contract GoldmintPowh {
      * The reason for this, is that in the frontend, we will want to get the total divs (global + ref)
      * But in the internal calculations, we want them separate. 
      */ 
-    function userReward(bool _includeReferralBonus) public view returns(uint256) {
-        return _includeReferralBonus ? rewardOf(msg.sender) + _referralBalances[msg.sender] : rewardOf(msg.sender) ;
+    function getUserReward(bool includeRefBonus) public view returns(uint256) {
+        uint256 reward = rewardOf(msg.sender);
+        if (includeRefBonus) reward = SafeMath.add(reward, _referralBalances[msg.sender]);
+        
+        return reward;
     }    
 
 
     /**
-     * Retrieve the dividend balance of any single address.
+     * Retrieve the reward balance of any single address.
      */
     function rewardOf(address userAddress) view public returns(uint256) {
         return (uint256) ((int256)(_bonusPerMntp * _userTokenBalances[userAddress]) - _rewardPayouts[userAddress]) / MAGNITUDE;
@@ -233,7 +262,7 @@ contract GoldmintPowh {
 
 
     function estimateBuyOrder(uint256 ethAmount) public view returns(uint256, uint256, uint256) {
-        uint256 totalFeeEth = getTotalFee(ethAmount);
+        uint256 totalFeeEth = calcTotalFee(ethAmount);
         uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
         uint256 tokenAmount = ethToTokens(taxedEth);
 
@@ -243,7 +272,7 @@ contract GoldmintPowh {
 
     function estimateSellOrder(uint256 tokenAmount) public view returns(uint256, uint256, uint256, uint256) {
         uint256 ethAmount = tokensToEth(tokenAmount);
-        uint256 totalFeeEth = getTotalFee(ethAmount);
+        uint256 totalFeeEth = calcTotalFee(ethAmount);
         uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
 
         uint256 payout = (uint256)((uint256)(_bonusPerMntp * tokenAmount + (taxedEth * MAGNITUDE)) / MAGNITUDE);
@@ -258,6 +287,10 @@ contract GoldmintPowh {
     function getCurrentUserMaxPurchase() public view returns(uint256) {
         return getUserMaxPurchase(msg.sender);
     }
+
+    function getDevReward() public view returns(uint256) {
+        return _devReward;
+    }
     
     /*==========================================
     =            INTERNAL FUNCTIONS            =
@@ -270,7 +303,7 @@ contract GoldmintPowh {
         
         // refferal program
         if (refAddress != 0x0 && refAddress != msg.sender && getUserTokenBalance(refAddress) >= MIN_REF_TOKEN_AMOUNT) {
-            uint256 refBonusEth = getRefBonus(totalFeeEth);
+            uint256 refBonusEth = calcRefBonus(totalFeeEth);
             totalFeeEth = SafeMath.sub(totalFeeEth, refBonusEth);
             _referralBalances[refAddress] = SafeMath.add(_referralBalances[refAddress], refBonusEth);
         }
@@ -279,7 +312,7 @@ contract GoldmintPowh {
 
         if (getTotalTokenSupply() > 0) {
             // take the amount of dividends gained through this transaction, and allocates them evenly to each shareholder
-            addProfitPerShare(totalFeeEth);
+            distributeFee(totalFeeEth);
             
             // calculate the amount of tokens the customer receives over his purchase 
             fee = fee - (fee - tokenAmount * totalFeeEth * MAGNITUDE / getTotalTokenSupply());
@@ -297,18 +330,22 @@ contract GoldmintPowh {
         return tokenAmount;
     }
 
-    function addProfitPerShare(uint256 totalFee) internal {
+    function distributeFee(uint256 totalFeeEth) internal {
+
+        addProfitPerShare(totalFeeEth);
+        addDevReward(totalFeeEth);
+    }
+
+
+    function addProfitPerShare(uint256 totalFeeEth) internal {
         if (getTotalTokenSupply() == 0) return;
 
-        uint256 totalShareReward = getTotalShareRewardFee(totalFee);
+        uint256 totalShareReward = calcTotalShareRewardFee(totalFeeEth);
         _bonusPerMntp = SafeMath.add(_bonusPerMntp, (totalShareReward * MAGNITUDE) / getTotalTokenSupply());
     }
 
-    function subProfitPerShare(uint256 totalFee) internal {
-        if (getTotalTokenSupply() == 0) return;
-
-        uint256 totalShareReward = getTotalShareRewardFee(totalFee);
-        _bonusPerMntp = SafeMath.sub(_bonusPerMntp, (totalShareReward * MAGNITUDE) / getTotalTokenSupply());
+    function addDevReward(uint256 totalFeeEth) internal {
+        _devReward = SafeMath.add(_devReward, calcDevReward(totalFeeEth));
     }    
 
     function addUserTokens(address user, uint256 tokenAmount) internal returns(bool) {
@@ -325,11 +362,8 @@ contract GoldmintPowh {
         return true;     
     }  
 
-    /**
-     * Calculate Token price based on an amount of incoming ethereum
-     * It's an algorithm, hopefully we gave you the whitepaper with it in scientific notation;
-     * Some conversions occurred to prevent decimal errors or underflows / overflows in solidity code.
-     */
+
+
     function ethToTokens(uint256 ethAmount) internal view returns(uint256) {
         uint256 tokenPriceInitial = TOKEN_PRICE_INITIAL * 1e18;
         uint256 tokensReceived = 
@@ -374,17 +408,29 @@ contract GoldmintPowh {
         return ethAmount;
     }
 
-    function getTotalFee(uint256 ethAmount) internal returns(uint256) {
+    function calcTotalFee(uint256 ethAmount) internal pure returns(uint256) {
         return calcPercent(ethAmount, TOTAL_FEE_PERCENT);
     } 
 
-    function getTotalShareRewardFee(uint256 totalFee) internal pure returns(uint256) {
-        return calcPercent(totalFee, SHARE_REWARD_PERCENT);
+    function calcTotalShareRewardFee(uint256 totalFee) internal pure returns(uint256) {
+        return calcPercent(totalFee, MNTP_REWARD_PERCENT);
     }
     
-    function getRefBonus(uint256 totalFee) internal pure returns(uint256) {
+    function calcRefBonus(uint256 totalFee) internal pure returns(uint256) {
         return calcPercent(totalFee, REF_BONUS_PERCENT);
     }
+
+    function calcDevReward(uint256 totalFee) internal pure returns(uint256) {
+        return calcPercent(totalFee, DEV_REWARD_PERCENT);
+    }
+
+    function calcQuickPromoBonus(uint256 totalFee) internal pure returns(uint256) {
+        return calcPercent(totalFee, QUICK_PROMO_PERCENT);
+    }    
+
+    function calcBigPromoBonus(uint256 totalFee) internal pure returns(uint256) {
+        return calcPercent(totalFee, BIG_PROMO_PERCENT);
+    }        
     
     function calcPercent(uint256 amount, uint8 percent) internal pure returns(uint256) {
         return SafeMath.mul(SafeMath.div(amount, 100), percent);
