@@ -33,6 +33,8 @@ contract GoldmintPowh {
 
     mapping(bytes32 => bool) public _administrators;
     
+    uint256 internal _totalSupply;
+
     uint256 internal _bonusPerMntp;
     uint256 internal _devReward;
     
@@ -90,20 +92,28 @@ contract GoldmintPowh {
 
     function GoldmintPowh(address mntpTokenAddress) public {
         _mntpToken = IMNTP(mntpTokenAddress);
+        _administrators[keccak256(msg.sender)] = true;
     }
+    
+    function setTotalSupply(uint256 totalTokenAmount) public onlyAdministrator {
+        uint256 tokenAmount = _mntpToken.balanceOf(address(this));
+        
+        require(_totalSupply == 0 && tokenAmount == totalTokenAmount);
 
+        _totalSupply = totalTokenAmount;
+    }
 
     /**
      * Converts incoming eth to tokens
      */
-    function buy(address refAddress) public payable returns(uint256) {
-        purchaseTokens(msg.value, refAddress);
+    function buy(address refAddress) public payable returns(uint256){
+        return purchaseTokens(msg.value, refAddress);
     }
-    
+
     /**
      * Fallback function to handle ethereum that was send straight to the contract
      */
-    function() payable public {
+    function() public payable {
         purchaseTokens(msg.value, 0x0);
     }
 
@@ -132,7 +142,7 @@ contract GoldmintPowh {
      * Withdraws all of the callers earnings.
      */
     function withdraw() onlyRewardOwners() public {
-        uint256 reward = getUserReward(false); // get ref. bonus later in the code
+        uint256 reward = getUserReward(false);
         
         // update dividend tracker
         _rewardPayouts[msg.sender] +=  (int256) (reward * MAGNITUDE);
@@ -151,20 +161,25 @@ contract GoldmintPowh {
     /**
      * sell tokens for eth
      */
-    function sell(uint256 tokenAmount) onlyContractUsers() public {
+    function sell(uint256 tokenAmount) onlyContractUsers() public returns(uint256){
         require(tokenAmount <= getCurrentUserTokenBalance());
 
-        uint256 payout = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0;
+        uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0;
 
-        (payout, ethAmount, totalFeeEth, taxedEth) = estimateSellOrder(tokenAmount);
+        (taxedEth, ethAmount, totalFeeEth) = estimateSellOrder(tokenAmount);
 
+        
         subUserTokens(msg.sender, tokenAmount);
 
-        msg.sender.transfer(payout);
+        // add reward to the user for the transaction
+        //_rewardPayouts[msg.sender] -= (int256) (tokenAmount * _bonusPerMntp);
+        distributeFee(totalFeeEth, 0x0);
+
+        msg.sender.transfer(taxedEth);
         
-        distributeFee(totalFeeEth);
-        
-        onTokenSell(msg.sender, tokenAmount, payout);
+        onTokenSell(msg.sender, tokenAmount, taxedEth);
+
+        return taxedEth;
     }   
 
 
@@ -200,9 +215,17 @@ contract GoldmintPowh {
     }
     
     function getTotalTokenSupply() public view returns(uint256) {
+        return _totalSupply;
+    }
+
+    function getRemainTokenAmount() public view returns(uint256) {
         return _mntpToken.balanceOf(address(this));
     }
-    
+
+    function getTotalTokenSold() public view returns(uint256) {
+        return _totalSupply - getRemainTokenAmount();
+    }
+
     function getUserTokenBalance(address userAddress) public view returns(uint256) {
         return _userTokenBalances[userAddress];
     }
@@ -218,27 +241,20 @@ contract GoldmintPowh {
      * But in the internal calculations, we want them separate. 
      */ 
     function getUserReward(bool includeRefBonus) public view returns(uint256) {
-        uint256 reward = rewardOf(msg.sender);
+        uint256 reward = (uint256) ((int256)(_bonusPerMntp * _userTokenBalances[msg.sender]) - _rewardPayouts[msg.sender]) / MAGNITUDE;
+        
         if (includeRefBonus) reward = SafeMath.add(reward, _referralBalances[msg.sender]);
         
         return reward;
     }    
 
-
-    /**
-     * Retrieve the reward balance of any single address.
-     */
-    function rewardOf(address userAddress) view public returns(uint256) {
-        return (uint256) ((int256)(_bonusPerMntp * _userTokenBalances[userAddress]) - _rewardPayouts[userAddress]) / MAGNITUDE;
-    }
-    
     function get1TokenSellPrice() public view returns(uint256) {
         // our calculation relies on the token supply, so we need supply. Doh.
-        if(getTotalTokenSupply() == 0){
+        if(getTotalTokenSold() == 0){
             return TOKEN_PRICE_INITIAL - TOKEN_PRICE_INC;
         } else {
-            uint256 payout = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0;
-            (payout, ethAmount, totalFeeEth, taxedEth) = estimateSellOrder(1e18);
+            uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0; 
+            (taxedEth, ethAmount, totalFeeEth) = estimateSellOrder(1e18);
 
             return taxedEth;
         }
@@ -246,7 +262,7 @@ contract GoldmintPowh {
     
     function get1TokenBuyPrice() public view returns(uint256) {
         // our calculation relies on the token supply, so we need supply. Doh.
-        if(getTotalTokenSupply() == 0){
+        if(getTotalTokenSold() == 0){
             return TOKEN_PRICE_INITIAL + TOKEN_PRICE_INC;
         } else {
             uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0;
@@ -270,14 +286,12 @@ contract GoldmintPowh {
     }
     
 
-    function estimateSellOrder(uint256 tokenAmount) public view returns(uint256, uint256, uint256, uint256) {
+    function estimateSellOrder(uint256 tokenAmount) public view returns(uint256, uint256, uint256) {
         uint256 ethAmount = tokensToEth(tokenAmount);
         uint256 totalFeeEth = calcTotalFee(ethAmount);
         uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
 
-        uint256 payout = (uint256)((uint256)(_bonusPerMntp * tokenAmount + (taxedEth * MAGNITUDE)) / MAGNITUDE);
-        
-        return (payout, ethAmount, totalFeeEth, taxedEth);
+        return (taxedEth, ethAmount, totalFeeEth);
     }
 
     function getUserMaxPurchase(address userAddress) public view returns(uint256) {
@@ -292,57 +306,54 @@ contract GoldmintPowh {
         return _devReward;
     }
     
-    /*==========================================
-    =            INTERNAL FUNCTIONS            =
-    ==========================================*/
+    // INTERNAL FUNCTIONS
+
     function purchaseTokens(uint256 ethAmount, address refAddress) internal returns(uint256) {
         uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0;
         (tokenAmount, totalFeeEth, taxedEth) = estimateBuyOrder(ethAmount);
 
-        require(tokenAmount > 0 && (SafeMath.add(tokenAmount, getTotalTokenSupply()) > getTotalTokenSupply()));
-        
-        // refferal program
-        if (refAddress != 0x0 && refAddress != msg.sender && getUserTokenBalance(refAddress) >= MIN_REF_TOKEN_AMOUNT) {
-            uint256 refBonusEth = calcRefBonus(totalFeeEth);
-            totalFeeEth = SafeMath.sub(totalFeeEth, refBonusEth);
-            _referralBalances[refAddress] = SafeMath.add(_referralBalances[refAddress], refBonusEth);
-        }
-        
-        uint256 fee = totalFeeEth * MAGNITUDE;
+        require(tokenAmount > 0 && (SafeMath.add(tokenAmount, getTotalTokenSold()) > getTotalTokenSold()));
 
-        if (getTotalTokenSupply() > 0) {
-            // take the amount of dividends gained through this transaction, and allocates them evenly to each shareholder
-            distributeFee(totalFeeEth);
-            
-            // calculate the amount of tokens the customer receives over his purchase 
-            fee = fee - (fee - tokenAmount * totalFeeEth * MAGNITUDE / getTotalTokenSupply());
-        }
+        if (refAddress == msg.sender || getUserTokenBalance(refAddress) < MIN_REF_TOKEN_AMOUNT) refAddress = 0x0;
+
+        uint256 userRewardBefore = getUserReward(false);
+
+        distributeFee(totalFeeEth, refAddress);
         
-        // update circulating supply & the ledger address for the customer
         addUserTokens(msg.sender, tokenAmount);
 
-        // Tells the contract that the buyer doesn't deserve dividends for the tokens before they owned them;
-        _rewardPayouts[msg.sender] += (int256)(_bonusPerMntp * tokenAmount - fee);
-
+        // the user is not going to receive any reward for the current purchase
+        _rewardPayouts[msg.sender] += (int256)((getUserReward(false) - userRewardBefore) * MAGNITUDE);
         
         onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
         return tokenAmount;
     }
 
-    function distributeFee(uint256 totalFeeEth) internal {
+    function distributeFee(uint256 totalFeeEth, address refAddress) internal {
 
-        addProfitPerShare(totalFeeEth);
+        addProfitPerShare(totalFeeEth, refAddress);
         addDevReward(totalFeeEth);
     }
 
 
-    function addProfitPerShare(uint256 totalFeeEth) internal {
-        if (getTotalTokenSupply() == 0) return;
+    function addProfitPerShare(uint256 totalFeeEth, address refAddress) internal {
+        
+        if (getTotalTokenSold() == 0) return;
+
+        uint256 refBonus = calcRefBonus(totalFeeEth);
 
         uint256 totalShareReward = calcTotalShareRewardFee(totalFeeEth);
-        _bonusPerMntp = SafeMath.add(_bonusPerMntp, (totalShareReward * MAGNITUDE) / getTotalTokenSupply());
+
+        if (refAddress != 0x0) {
+            _referralBalances[refAddress] = SafeMath.add(_referralBalances[refAddress], refBonus);
+        } else {
+            totalShareReward = SafeMath.add(totalShareReward, refBonus);
+        }
+
+        _bonusPerMntp = SafeMath.add(_bonusPerMntp, (totalShareReward * MAGNITUDE) / getTotalTokenSold());
     }
+
 
     function addDevReward(uint256 totalFeeEth) internal {
         _devReward = SafeMath.add(_devReward, calcDevReward(totalFeeEth));
@@ -360,9 +371,7 @@ contract GoldmintPowh {
         _mntpToken.transferFrom(user, address(this), tokenAmount);
 
         return true;     
-    }  
-
-
+    }
 
     function ethToTokens(uint256 ethAmount) internal view returns(uint256) {
         uint256 tokenPriceInitial = TOKEN_PRICE_INITIAL * 1e18;
@@ -377,14 +386,14 @@ contract GoldmintPowh {
                             +
                             (2*(TOKEN_PRICE_INC * 1e18)*(ethAmount * 1e18))
                             +
-                            (((TOKEN_PRICE_INC)**2)*(getTotalTokenSupply()**2))
+                            (((TOKEN_PRICE_INC)**2)*(getRemainTokenAmount()**2))
                             +
-                            (2*(TOKEN_PRICE_INC)*tokenPriceInitial*getTotalTokenSupply())
+                            (2*(TOKEN_PRICE_INC)*tokenPriceInitial*getRemainTokenAmount())
                         )
                     ), tokenPriceInitial
                 )
             )/(TOKEN_PRICE_INC)
-        )-(getTotalTokenSupply())
+        )-(getRemainTokenAmount())
         ;
   
         return tokensReceived;
@@ -398,7 +407,7 @@ contract GoldmintPowh {
                 (
                     (
                         (
-                            TOKEN_PRICE_INITIAL + (TOKEN_PRICE_INC * (getTotalTokenSupply()/1e18))
+                            TOKEN_PRICE_INITIAL + (TOKEN_PRICE_INC * (getTotalTokenSold()/1e18))
                         )-TOKEN_PRICE_INC
                     )*(tokens - 1e18)
                 ),(TOKEN_PRICE_INC*((tokens**2-tokens)/1e18))/2
