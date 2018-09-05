@@ -236,16 +236,14 @@ contract GoldmintPowh {
 
     /**
      * Retrieve the reward owned by the caller.
-     * If `_includeReferralBonus` is to to 1/true, the referral bonus will be included in the calculations.
+     * If `includeRefBonus` is to to 1/true, the referral bonus will be included in the calculations.
      * The reason for this, is that in the frontend, we will want to get the total divs (global + ref)
      * But in the internal calculations, we want them separate. 
      */ 
     function getUserReward(bool includeRefBonus) public view returns(uint256) {
         uint256 reward = _bonusPerMntp * _userTokenBalances[msg.sender];
-        reward = ((reward < _rewardPayouts[msg.sender]) ? reward : SafeMath.sub(reward, _rewardPayouts[msg.sender])) / MAGNITUDE;
+        reward = ((reward < _rewardPayouts[msg.sender]) ? 0 : SafeMath.sub(reward, _rewardPayouts[msg.sender])) / MAGNITUDE;
         
-        //uint256 reward = (uint256) (_bonusPerMntp * _userTokenBalances[msg.sender] / MAGNITUDE);
-
         if (includeRefBonus) reward = SafeMath.add(reward, _referralBalances[msg.sender]);
         
         return reward;
