@@ -28,7 +28,7 @@ contract GoldmintPowh {
 
     mapping(address => uint256) internal _userTokenBalances;
     mapping(address => uint256) internal _referralBalances;
-    mapping(address => int256) internal _rewardPayouts;
+    mapping(address => uint256) internal _rewardPayouts;
     mapping(address => uint256) internal _ambassadorAccumulatedQuota;    
 
     mapping(bytes32 => bool) public _administrators;
@@ -125,7 +125,7 @@ contract GoldmintPowh {
         uint256 reward = getUserReward(false); // retrieve ref. bonus later in the code
         
         // pay out the reward virtually
-        _rewardPayouts[msg.sender] +=  (int256) (reward * MAGNITUDE);
+        _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], reward * MAGNITUDE);
         
         // retrieve ref. bonus
         reward += _referralBalances[msg.sender];
@@ -141,28 +141,28 @@ contract GoldmintPowh {
      /**
      * Withdraws all of the callers earnings.
      */
-    function withdraw() onlyRewardOwners() public {
+    function withdraw() /*onlyRewardOwners()*/ public {
+        if (getUserReward(true) == 0) return;
+
         uint256 reward = getUserReward(false);
         
         // update dividend tracker
-        _rewardPayouts[msg.sender] +=  (int256) (reward * MAGNITUDE);
+        _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], reward * MAGNITUDE);
         
         // add ref. bonus
-        reward += _referralBalances[msg.sender];
+        reward = SafeMath.add(reward, _referralBalances[msg.sender]);
         _referralBalances[msg.sender] = 0;
         
-        // lambo delivery service
         msg.sender.transfer(reward);
         
-        // fire event
         onWithdraw(msg.sender, reward);
     }
     
     /**
      * sell tokens for eth
      */
-    function sell(uint256 tokenAmount) onlyContractUsers() public returns(uint256){
-        require(tokenAmount <= getCurrentUserTokenBalance());
+    function sell(uint256 tokenAmount) onlyContractUsers() public returns(uint256) {
+        if (tokenAmount > getCurrentUserTokenBalance() || tokenAmount == 0) return;
 
         uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0;
 
@@ -241,8 +241,11 @@ contract GoldmintPowh {
      * But in the internal calculations, we want them separate. 
      */ 
     function getUserReward(bool includeRefBonus) public view returns(uint256) {
-        uint256 reward = (uint256) ((int256)(_bonusPerMntp * _userTokenBalances[msg.sender]) - _rewardPayouts[msg.sender]) / MAGNITUDE;
+        uint256 reward = _bonusPerMntp * _userTokenBalances[msg.sender];
+        reward = ((reward < _rewardPayouts[msg.sender]) ? reward : SafeMath.sub(reward, _rewardPayouts[msg.sender])) / MAGNITUDE;
         
+        //uint256 reward = (uint256) (_bonusPerMntp * _userTokenBalances[msg.sender] / MAGNITUDE);
+
         if (includeRefBonus) reward = SafeMath.add(reward, _referralBalances[msg.sender]);
         
         return reward;
@@ -323,7 +326,7 @@ contract GoldmintPowh {
         addUserTokens(msg.sender, tokenAmount);
 
         // the user is not going to receive any reward for the current purchase
-        _rewardPayouts[msg.sender] += (int256)((getUserReward(false) - userRewardBefore) * MAGNITUDE);
+        _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], SafeMath.sub(getUserReward(false), userRewardBefore) * MAGNITUDE);
         
         onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
