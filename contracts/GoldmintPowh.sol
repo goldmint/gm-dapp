@@ -14,6 +14,11 @@ contract GoldmintPowh {
     uint8 constant internal BIG_PROMO_PERCENT = 5;
     uint8 constant internal QUICK_PROMO_PERCENT = 5;
 
+    uint128 constant internal BIG_PROMO_BLOCK_INTERVAL = 9999;
+    uint128 constant internal QUICK_PROMO_BLOCK_INTERVAL = 100;
+    uint128 constant internal PROMO_MIN_PURCHASE = 100;
+
+
 
     uint256 constant internal TOKEN_PRICE_INITIAL = 0.01 ether;
     uint256 constant internal TOKEN_PRICE_INC = 0.00000001 ether;
@@ -29,14 +34,19 @@ contract GoldmintPowh {
     mapping(address => uint256) internal _userTokenBalances;
     mapping(address => uint256) internal _referralBalances;
     mapping(address => uint256) internal _rewardPayouts;
+    mapping(address => uint256) internal _promoBonuses;
     mapping(address => uint256) internal _ambassadorAccumulatedQuota;    
 
     mapping(bytes32 => bool) public _administrators;
     
     uint256 internal _totalSupply;
 
+    uint256 internal _initBlockNum;
     uint256 internal _bonusPerMntp;
     uint256 internal _devReward;
+    uint256 internal _bigPromoBonus;
+    uint256 internal _quickPromoBonus;
+    
     
     event onTokenPurchase(
         address indexed customerAddress,
@@ -93,6 +103,7 @@ contract GoldmintPowh {
     function GoldmintPowh(address mntpTokenAddress) public {
         _mntpToken = IMNTP(mntpTokenAddress);
         _administrators[keccak256(msg.sender)] = true;
+        _initBlockNum = block.number;
     }
     
     function setTotalSupply(uint256 totalTokenAmount) public onlyAdministrator {
@@ -306,6 +317,16 @@ contract GoldmintPowh {
     function getDevReward() public view returns(uint256) {
         return _devReward;
     }
+
+    function getBlockNum() public view returns(uint256) {
+        return block.number;
+    }
+
+    uint256 _testInc = 0;
+    function nextBlock() public {
+        _testInc++;
+    }
+
     
     // INTERNAL FUNCTIONS
 
@@ -326,17 +347,38 @@ contract GoldmintPowh {
         // the user is not going to receive any reward for the current purchase
         _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], SafeMath.sub(getUserReward(false), userRewardBefore) * MAGNITUDE);
         
+        checkAndSendPromoBonus(tokenAmount);
+
         onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
         return tokenAmount;
+    }
+
+    function checkAndSendPromoBonus(uint256 purchaedTokenAmount) internal {
+        if (purchaedTokenAmount < PROMO_MIN_PURCHASE) return;
+
+        if ((block.number - _initBlockNum) % QUICK_PROMO_BLOCK_INTERVAL == 0) sendQuickPromoBonus();
+        if ((block.number - _initBlockNum) % BIG_PROMO_BLOCK_INTERVAL == 0) sendBigPromoBonus();
+    }
+
+    function sendQuickPromoBonus() internal {
+        _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], _quickPromoBonus);
+        _quickPromoBonus = 0;
+    }
+
+
+    function sendBigPromoBonus() internal {
+        _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], _bigPromoBonus);
+        _bigPromoBonus = 0;        
     }
 
     function distributeFee(uint256 totalFeeEth, address refAddress) internal {
 
         addProfitPerShare(totalFeeEth, refAddress);
         addDevReward(totalFeeEth);
+        addBigPromoBonus(totalFeeEth);
+        addQuickPromoBonus(totalFeeEth);
     }
-
 
     function addProfitPerShare(uint256 totalFeeEth, address refAddress) internal {
         
@@ -355,9 +397,16 @@ contract GoldmintPowh {
         _bonusPerMntp = SafeMath.add(_bonusPerMntp, (totalShareReward * MAGNITUDE) / getTotalTokenSold());
     }
 
-
     function addDevReward(uint256 totalFeeEth) internal {
         _devReward = SafeMath.add(_devReward, calcDevReward(totalFeeEth));
+    }    
+
+    function addBigPromoBonus(uint256 totalFeeEth) internal {
+        _bigPromoBonus = SafeMath.add(_bigPromoBonus, calcBigPromoBonus(totalFeeEth));
+    }
+
+    function addQuickPromoBonus(uint256 totalFeeEth) internal {
+        _quickPromoBonus = SafeMath.add(_quickPromoBonus, calcQuickPromoBonus(totalFeeEth));
     }    
 
     function addUserTokens(address user, uint256 tokenAmount) internal returns(bool) {
