@@ -70,7 +70,14 @@ describe('POWH', function() {
 
     });
 
+    it('test block num', async() => {
+        console.log("bn " + (await powhContract.getBlockNum()));
+        console.log("bn " + (await powhContract.getBlockNum()));
+        await powhContract.nextBlock();
+        console.log("bn " + (await powhContract.getBlockNum()));
 
+    })
+return;
     it('should issue some MNTP', async() => {
 
         var powhContractTokenAmount = 2000000*ether;
@@ -362,7 +369,7 @@ describe('POWH', function() {
         var buyer1EthBalance2 = web3.eth.getBalance(buyer1);
         var buyer1Reward2 = await powhContract.getUserReward(true, { from: buyer1 });
         console.log("buyer1Reward2: " + buyer1Reward2.toString(10));
-
+        
         assert(Math.abs(buyer1EthBalance2.sub(buyer1EthBalance1).sub(buyer1Reward1)) < 100000);
 
         assert.equal(buyer1Reward2.toString(10), "0");
