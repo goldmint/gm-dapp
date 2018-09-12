@@ -5,6 +5,7 @@ var expect = require('chai').expect;
 var fs = require('fs');
 var assert = require('assert');
 var BigNumber = require('bignumber.js');
+var realMath = require('./helpers/real_math.js');
 
 var web3 = new Web3(new Web3.providers.HttpProvider(process.env.ETH_NODE));
 
@@ -19,8 +20,8 @@ var buyer4;
 var mntContractAddress;
 var mntContract;
 
-var powhContractAddress;
-var powhContract;
+var mraContractAddress;
+var mraContract;
 
 var ether = 1000000000000000000;
 var totalTokenSupply = 0;
@@ -29,7 +30,7 @@ var refFeePercent = 0;
 
 eval(fs.readFileSync('./test/helpers/misc.js')+'');
 
-describe('POWH', function() {
+describe('MINTARAMA', function() {
 
     before("Initialize everything", function(done) {
           web3.eth.getAccounts(function(err, as) {
@@ -54,14 +55,13 @@ describe('POWH', function() {
     after("Deinitialize everything", function(done) {
           done();
     });    
-
     it('should deploy token contract', function(done) {
           var data = {};
 
           deployMntContract(data,function(err){
                assert.equal(err,null);
                
-                deployGoldmintPowhContract(data,function(err){
+                deployMintaramaContract(data,function(err){
                     assert.equal(err,null);
 
                     done();
@@ -70,27 +70,20 @@ describe('POWH', function() {
 
     });
 
-    it('test block num', async() => {
-        console.log("bn " + (await powhContract.getBlockNum()));
-        console.log("bn " + (await powhContract.getBlockNum()));
-        await powhContract.nextBlock();
-        console.log("bn " + (await powhContract.getBlockNum()));
 
-    })
-return;
     it('should issue some MNTP', async() => {
 
-        var powhContractTokenAmount = 2000000*ether;
+        var mraContractTokenAmount = 2000000*ether;
 
-        await mntContract.issueTokens(powhContractAddress, powhContractTokenAmount, { from: creator, gas: 2900000 });
+        await mntContract.issueTokens(mraContractAddress, mraContractTokenAmount, { from: creator, gas: 2900000 });
 
-        assert.equal(powhContractTokenAmount, mntContract.balanceOf(powhContractAddress));
+        assert.equal(mraContractTokenAmount, mntContract.balanceOf(mraContractAddress));
 
-        await powhContract.setTotalSupply(powhContractTokenAmount, { from: creator, gas: 2900000 });
+        await mraContract.setTotalSupply(mraContractTokenAmount, { from: creator, gas: 2900000 });
         
-        var totalSupply = await powhContract.getTotalTokenSupply();
+        var totalSupply = await mraContract.getTotalTokenSupply();
 
-        assert.equal(totalSupply.sub(powhContractTokenAmount).toString(10), "0".toString(10));
+        assert.equal(totalSupply.sub(mraContractTokenAmount).toString(10), "0".toString(10));
 
         var byerTokenAmount = 1000*ether;
 
@@ -98,7 +91,7 @@ return;
 
         assert.equal(byerTokenAmount, mntContract.balanceOf(buyer2));
 
-        var buyer2MaxPurchase = await powhContract.getCurrentUserMaxPurchase({ from: buyer2, gas: 2900000 });
+        var buyer2MaxPurchase = await mraContract.getCurrentUserMaxPurchase({ from: buyer2, gas: 2900000 });
 
         assert.equal(byerTokenAmount, buyer2MaxPurchase);
 
@@ -108,9 +101,9 @@ return;
     });
 
     it('init vars', async() => {
-        shareFeePercent = await powhContract.getShareRewardPercent();    
-        refFeePercent = await powhContract.getRefBonusPercent();
-        totalTokenSupply = await powhContract.getTotalTokenSupply();     
+        shareFeePercent = await mraContract.getShareRewardPercent();    
+        refFeePercent = await mraContract.getRefBonusPercent();
+        totalTokenSupply = await mraContract.getTotalTokenSupply();     
     });
 
 
@@ -120,39 +113,39 @@ return;
             var ethAmount = 2 * ether;
 
             var mntpContractUserBalance1 = mntContract.balanceOf(buyer1);
-            var powhContractUserBalance1 = await powhContract.getCurrentUserTokenBalance();
+            var mraContractUserBalance1 = await mraContract.getCurrentUserTokenBalance();
 
-            var ethContractBalance1 = web3.eth.getBalance(powhContractAddress);
+            var ethContractBalance1 = web3.eth.getBalance(mraContractAddress);
 
-            var userReward1 = await powhContract.getUserReward(true);
+            var userReward1 = await mraContract.getUserReward(true);
 
 
-            var est = await powhContract.estimateBuyOrder(ethAmount);
+            var est = await mraContract.estimateBuyOrder(ethAmount);
             var estimateTokenAmount = est[0]; 
             var totalPurchaseFee = est[1];
 
-            var devRewardPercent = await powhContract.getDevRewardPercent();
+            var devRewardPercent = await mraContract.getDevRewardPercent();
             var estimatedDevReward = Math.floor(devRewardPercent * totalPurchaseFee / 100);
 
 
-            var devReward1 = await powhContract.getDevReward();
+            var devReward1 = await mraContract.getDevReward();
         }
-        await powhContract.buy(0x0, { from: buyer1, gas: 2900000, value: ethAmount });
+        await mraContract.buy(0x0, { from: buyer1, gas: 2900000, value: ethAmount });
         {
             
-            var devReward2 = await powhContract.getDevReward();
+            var devReward2 = await mraContract.getDevReward();
             assert.equal(estimatedDevReward.toString(10), devReward2.sub(devReward1).toString(10));
 
-            var powhContractUserBalance2 = powhContract.getCurrentUserTokenBalance({ from: buyer1 });
-            assert.equal((powhContractUserBalance2.sub(powhContractUserBalance1)).toString(10), estimateTokenAmount.toString(10));
+            var mraContractUserBalance2 = mraContract.getCurrentUserTokenBalance({ from: buyer1 });
+            assert.equal((mraContractUserBalance2.sub(mraContractUserBalance1)).toString(10), estimateTokenAmount.toString(10));
 
             var mntpContractUserBalance2 = mntContract.balanceOf(buyer1);
             assert.equal(estimateTokenAmount.toString(10), (mntpContractUserBalance2.sub(mntpContractUserBalance1)).toString(10));
 
-            var ethContractBalance2 = web3.eth.getBalance(powhContractAddress);
+            var ethContractBalance2 = web3.eth.getBalance(mraContractAddress);
             assert.equal((ethContractBalance2.sub(ethContractBalance1)).toString(10), ethAmount.toString(10));
 
-            var userReward2 = await powhContract.getUserReward(true, { from: buyer1 });
+            var userReward2 = await mraContract.getUserReward(true, { from: buyer1 });
             assert.equal(userReward2.sub(userReward1).toString(10), "0");
             
         }
@@ -168,56 +161,56 @@ return;
         //purchase without a ref
         {
             var mntpContractUserBalance1 = mntContract.balanceOf(buyer2);
-            var powhContractUserBalance1 = await powhContract.getCurrentUserTokenBalance({ from: buyer2 });
+            var mraContractUserBalance1 = await mraContract.getCurrentUserTokenBalance({ from: buyer2 });
 
-            var ethContractBalance1 = web3.eth.getBalance(powhContractAddress);
+            var ethContractBalance1 = web3.eth.getBalance(mraContractAddress);
 
 
-            var userReward1 = await powhContract.getUserReward(true, { from: buyer1 });
-            var buyEst = await powhContract.estimateBuyOrder(ethAmount);
+            var userReward1 = await mraContract.getUserReward(true, { from: buyer1 });
+            var buyEst = await mraContract.estimateBuyOrder(ethAmount);
 
             var estimateTokenAmount = buyEst[0];
             var totalPurchaseFee = buyEst[1];
 
-            var buyer1TokenBalance = await powhContract.getUserTokenBalance(buyer1);
+            var buyer1TokenBalance = await mraContract.getUserTokenBalance(buyer1);
 
-            var buyer2TokenBalance = await powhContract.getUserTokenBalance(buyer2);
+            var buyer2TokenBalance = await mraContract.getUserTokenBalance(buyer2);
             console.log("buyer2TokenBalance: " + buyer2TokenBalance);
 
-            var devRewardPercent = await powhContract.getDevRewardPercent();;
+            var devRewardPercent = await mraContract.getDevRewardPercent();;
             var estimatedDevReward = Math.floor(devRewardPercent * totalPurchaseFee / 100);
-            var devReward1 = await powhContract.getDevReward();
+            var devReward1 = await mraContract.getDevReward();
             var totalShareReward = totalPurchaseFee * shareFeePercent / 100;
             var refReward = totalPurchaseFee * refFeePercent / 100;
             
-            var buyer2Reward1 = await powhContract.getUserReward(false, { from: buyer2 });
+            var buyer2Reward1 = await mraContract.getUserReward(false, { from: buyer2 });
             console.log("buyer2Reward1: " + buyer2Reward1);
 
-            var totalTokenSold = await powhContract.getTotalTokenSold();
+            var totalTokenSold = await mraContract.getTotalTokenSold();
             
 
             var esitmatedShareRewardWithoutRefBuyer1 = new BigNumber(Math.floor(((totalShareReward + refReward) / totalTokenSold) * buyer1TokenBalance).toString()); 
 
-            await powhContract.buy(0x0, { from: buyer2, gas: 2900000, value: ethAmount });
+            await mraContract.buy(0x0, { from: buyer2, gas: 2900000, value: ethAmount });
             {
  
-                var powhContractUserBalance2 = await powhContract.getCurrentUserTokenBalance({ from: buyer2, gas: 2900000 });
-                assert.equal((powhContractUserBalance2.sub(powhContractUserBalance1)).toString(10), estimateTokenAmount.toString(10));
+                var mraContractUserBalance2 = await mraContract.getCurrentUserTokenBalance({ from: buyer2, gas: 2900000 });
+                assert.equal((mraContractUserBalance2.sub(mraContractUserBalance1)).toString(10), estimateTokenAmount.toString(10));
 
                 var mntpContractUserBalance2 = mntContract.balanceOf(buyer2);
                 assert.equal(estimateTokenAmount.toString(10), (mntpContractUserBalance2.sub(mntpContractUserBalance1)).toString(10));
 
-                var ethContractBalance2 = web3.eth.getBalance(powhContractAddress);
+                var ethContractBalance2 = web3.eth.getBalance(mraContractAddress);
                 assert.equal((ethContractBalance2.sub(ethContractBalance1)).toString(10), ethAmount.toString(10));
 
-                var userReward2 = await powhContract.getUserReward(true, { from: buyer1 });
+                var userReward2 = await mraContract.getUserReward(true, { from: buyer1 });
 
                 assert.equal(Math.abs(userReward2.sub(userReward1).sub(esitmatedShareRewardWithoutRefBuyer1)) < 5, true);
 
-                var devReward2 = await powhContract.getDevReward();
+                var devReward2 = await mraContract.getDevReward();
                 assert.equal(estimatedDevReward.toString(10), devReward2.sub(devReward1).toString(10));
 
-                var buyer2Reward2 = await powhContract.getUserReward(false, { from: buyer2 });
+                var buyer2Reward2 = await mraContract.getUserReward(false, { from: buyer2 });
                 assert.equal(buyer2Reward2.sub(buyer2Reward1).toString(10), "0");
 
             }
@@ -225,22 +218,22 @@ return;
 
         //purchase with a ref
         {
-            var buyer1TokenBalance = await powhContract.getUserTokenBalance(buyer1);
-            var buyEst = await powhContract.estimateBuyOrder(ethAmount);
+            var buyer1TokenBalance = await mraContract.getUserTokenBalance(buyer1);
+            var buyEst = await mraContract.estimateBuyOrder(ethAmount);
             var estimateTokenAmount = buyEst[0];
             var totalPurchaseFee = buyEst[1];
             var totalShareReward = totalPurchaseFee * shareFeePercent / 100;
             var totalRefReward = totalPurchaseFee * refFeePercent / 100;
-            var totalTokenSold = await powhContract.getTotalTokenSold();
+            var totalTokenSold = await mraContract.getTotalTokenSold();
 
             esitmatedShareRewardWithRefBuyer1 = new BigNumber(Math.floor((totalShareReward / totalTokenSold) * buyer1TokenBalance).toString()); 
             totalRefReward = new BigNumber(totalRefReward.toString());
 
-            buyer1Reward1 = await powhContract.getUserReward(true, { from: buyer1 });
+            buyer1Reward1 = await mraContract.getUserReward(true, { from: buyer1 });
             
-            await powhContract.buy(buyer1, { from: buyer2, gas: 2900000, value: ethAmount });    
+            await mraContract.buy(buyer1, { from: buyer2, gas: 2900000, value: ethAmount });    
 
-            buyer1Reward2 = await powhContract.getUserReward(true, { from: buyer1 });
+            buyer1Reward2 = await mraContract.getUserReward(true, { from: buyer1 });
 
             assert(Math.abs(buyer1Reward2.sub(buyer1Reward1).sub(esitmatedShareRewardWithRefBuyer1).sub(totalRefReward)) < 5);
         }
@@ -251,11 +244,11 @@ return;
 
         var ethAmount = 2.5 * ether;
 
-        var est = await powhContract.estimateBuyOrder(ethAmount);
+        var est = await mraContract.estimateBuyOrder(ethAmount);
         var estimateTokenAmount = est[0]; 
         var mntpContractUserBalance1 = mntContract.balanceOf(buyer3);
 
-        await web3.eth.sendTransaction({ from: buyer3, to: powhContractAddress, value: ethAmount, gas: 2900000 });
+        await web3.eth.sendTransaction({ from: buyer3, to: mraContractAddress, value: ethAmount, gas: 2900000 });
 
         var mntpContractUserBalance2 = mntContract.balanceOf(buyer3);
         assert.equal(estimateTokenAmount.toString(10), (mntpContractUserBalance2.sub(mntpContractUserBalance1)).toString(10));
@@ -267,16 +260,16 @@ return;
 
         var tokenAmount = 10 * ether;
 
-        await mntContract.approve(powhContractAddress, tokenAmount, { from: buyer1, gas: 2900000});
+        await mntContract.approve(mraContractAddress, tokenAmount, { from: buyer1, gas: 2900000});
 
-        assert.equal(tokenAmount.toString(10), mntContract.allowance(buyer1, powhContractAddress).toString(10));
+        assert.equal(tokenAmount.toString(10), mntContract.allowance(buyer1, mraContractAddress).toString(10));
 
     });
 
     it('should not make a sell', function(done) {
         var tokenAmount = 20 * ether;
 
-        powhContract.sell(tokenAmount, { from: buyer1, gas: 2900000}, function(err, res) {
+        mraContract.sell(tokenAmount, { from: buyer1, gas: 2900000}, function(err, res) {
             assert.notEqual(err, null);   
 
             done(); 
@@ -288,68 +281,68 @@ return;
         {
             var tokenAmount = new BigNumber((10 * ether).toString());
 
-            var powhContractUserBalance1 = await powhContract.getCurrentUserTokenBalance({ from: buyer1 });
-            var buyer1TokenBalance = await powhContract.getUserTokenBalance(buyer1);
-            var buyer2TokenBalance = await powhContract.getUserTokenBalance(buyer2);
+            var mraContractUserBalance1 = await mraContract.getCurrentUserTokenBalance({ from: buyer1 });
+            var buyer1TokenBalance = await mraContract.getUserTokenBalance(buyer1);
+            var buyer2TokenBalance = await mraContract.getUserTokenBalance(buyer2);
 
             assert(buyer1TokenBalance > tokenAmount);
             
-            var buyer1Reward1 = await powhContract.getUserReward(false, { from: buyer1 });
-            var buyer2Reward1 = await powhContract.getUserReward(false, { from: buyer2 });
+            var buyer1Reward1 = await mraContract.getUserReward(false, { from: buyer1 });
+            var buyer2Reward1 = await mraContract.getUserReward(false, { from: buyer2 });
 
-            var mntpContrantPowhBalance1 = mntContract.balanceOf(powhContractAddress);
+            var mntpContrantPowhBalance1 = mntContract.balanceOf(mraContractAddress);
 
-            var sellEst = await powhContract.estimateSellOrder(tokenAmount);             
+            var sellEst = await mraContract.estimateSellOrder(tokenAmount);             
             var estimatedEthAmount = sellEst[0];
             var estimatedTotalFee = sellEst[2];
 
 
             var totalShareReward = estimatedTotalFee * (shareFeePercent.add(refFeePercent)) / 100;
-            var totalTokenSold = await powhContract.getTotalTokenSold();
+            var totalTokenSold = await mraContract.getTotalTokenSold();
 
 
-            var devRewardPercent = await powhContract.getDevRewardPercent();
+            var devRewardPercent = await mraContract.getDevRewardPercent();
             var estimatedDevReward = Math.floor(devRewardPercent * estimatedTotalFee / 100);
 
 
             var buyer2EsitmatedShareReward = new BigNumber(Math.floor((totalShareReward / (totalTokenSold.sub(tokenAmount))) * buyer2TokenBalance).toString()); 
             var buyer1EsitmatedShareReward = new BigNumber(Math.floor((totalShareReward / (totalTokenSold.sub(tokenAmount))) * buyer1TokenBalance).toString()); 
 
-            var devReward1 = await powhContract.getDevReward();
+            var devReward1 = await mraContract.getDevReward();
             
-            var ethPowhContractBalance1 = web3.eth.getBalance(powhContractAddress);
+            var ethPowhContractBalance1 = web3.eth.getBalance(mraContractAddress);
             var ethBuyer1Balance1 = web3.eth.getBalance(buyer1);
         }
 
-        await powhContract.sell(tokenAmount, { from: buyer1, gas: 2900000});
+        await mraContract.sell(tokenAmount, { from: buyer1, gas: 2900000});
         {
-            var buyer2Reward2 = await powhContract.getUserReward(false, { from: buyer2 });
+            var buyer2Reward2 = await mraContract.getUserReward(false, { from: buyer2 });
             assert(Math.abs(buyer2Reward2.sub(buyer2Reward1).sub(buyer2EsitmatedShareReward)) < 5);   
-            var buyer1Reward2 = await powhContract.getUserReward(false, { from: buyer1 });
+            var buyer1Reward2 = await mraContract.getUserReward(false, { from: buyer1 });
             /*
             console.log("buyer1Reward1: " + buyer1Reward1);
             console.log("buyer1Reward2: " + buyer1Reward2);
             console.log("buyer1EsitmatedShareReward: " + buyer1EsitmatedShareReward);
             */
-            var mntpContrantPowhBalance2 = mntContract.balanceOf(powhContractAddress);
+            var mntpContrantPowhBalance2 = mntContract.balanceOf(mraContractAddress);
             assert.equal((mntpContrantPowhBalance2.sub(mntpContrantPowhBalance1)).toString(10), tokenAmount.toString(10));
 
-            var ethPowhContractBalance2 = web3.eth.getBalance(powhContractAddress);
+            var ethPowhContractBalance2 = web3.eth.getBalance(mraContractAddress);
             var ethBuyer1Balance2 = web3.eth.getBalance(buyer1);
 
             assert.equal((ethPowhContractBalance1.sub(ethPowhContractBalance2)).toString(10), estimatedEthAmount.toString(10));
 
             assert(ethBuyer1Balance2.sub(ethBuyer1Balance1).sub(estimatedEthAmount) < 10000000000);
 
-            var powhContractUserBalance2 = await powhContract.getCurrentUserTokenBalance({ from: buyer1 });
+            var mraContractUserBalance2 = await mraContract.getCurrentUserTokenBalance({ from: buyer1 });
 
-            assert.equal((powhContractUserBalance1.sub(powhContractUserBalance2)).toString(10), tokenAmount.toString(10));
+            assert.equal((mraContractUserBalance1.sub(mraContractUserBalance2)).toString(10), tokenAmount.toString(10));
 
-            var devReward2 = await powhContract.getDevReward();
+            var devReward2 = await mraContract.getDevReward();
             assert.equal(estimatedDevReward.toString(10), devReward2.sub(devReward1).toString(10));    
 
 
-            var esitmatedShareRewardForSoldTokens = await powhContract.calculateReward(tokenAmount);
+            var esitmatedShareRewardForSoldTokens = await mraContract.calculateReward(tokenAmount);
             //console.log("esitmatedShareRewardForSoldTokens: " + esitmatedShareRewardForSoldTokens);
         } 
           
@@ -360,14 +353,14 @@ return;
     it('should withdraw reward', async() => {
         
         var buyer1EthBalance1 = web3.eth.getBalance(buyer1);
-        var powhContractEthBalance1 = web3.eth.getBalance(powhContractAddress);
-        var buyer1Reward1 = await powhContract.getUserReward(true, { from: buyer1 });
+        var mraContractEthBalance1 = web3.eth.getBalance(mraContractAddress);
+        var buyer1Reward1 = await mraContract.getUserReward(true, { from: buyer1 });
         console.log("buyer1Reward1: " + buyer1Reward1.toString(10));
         assert(buyer1Reward1 > 0);
-        await powhContract.withdraw({ from: buyer1 });
+        await mraContract.withdraw({ from: buyer1 });
 
         var buyer1EthBalance2 = web3.eth.getBalance(buyer1);
-        var buyer1Reward2 = await powhContract.getUserReward(true, { from: buyer1 });
+        var buyer1Reward2 = await mraContract.getUserReward(true, { from: buyer1 });
         console.log("buyer1Reward2: " + buyer1Reward2.toString(10));
         
         assert(Math.abs(buyer1EthBalance2.sub(buyer1EthBalance1).sub(buyer1Reward1)) < 100000);
@@ -381,55 +374,55 @@ return;
         {
 
 
-            var buyer1Reward1 = await powhContract.getUserReward(true, { from: buyer1 });
-            var buyer2Reward1 = await powhContract.getUserReward(true, { from: buyer2 });
-            var buyer3Reward1 = await powhContract.getUserReward(true, { from: buyer3 });
+            var buyer1Reward1 = await mraContract.getUserReward(true, { from: buyer1 });
+            var buyer2Reward1 = await mraContract.getUserReward(true, { from: buyer2 });
+            var buyer3Reward1 = await mraContract.getUserReward(true, { from: buyer3 });
 
-            var tokenPrice1 = await powhContract.get1TokenBuyPrice();
+            var tokenPrice1 = await mraContract.get1TokenBuyPrice();
             console.log("tokenPrice1 " + tokenPrice1);
 
-            var buyer1TokenBalance1 = await powhContract.getCurrentUserTokenBalance({ from: buyer1 });
-            var buyer2TokenBalance1 = await powhContract.getCurrentUserTokenBalance({ from: buyer2 });
-            var buyer3TokenBalance1 = await powhContract.getCurrentUserTokenBalance({ from: buyer3 });
+            var buyer1TokenBalance1 = await mraContract.getCurrentUserTokenBalance({ from: buyer1 });
+            var buyer2TokenBalance1 = await mraContract.getCurrentUserTokenBalance({ from: buyer2 });
+            var buyer3TokenBalance1 = await mraContract.getCurrentUserTokenBalance({ from: buyer3 });
 
             console.log("buyer1TokenBalance1 " + buyer1TokenBalance1);
             console.log("buyer2TokenBalance1 " + buyer2TokenBalance1);
             console.log("buyer3TokenBalance1 " + buyer3TokenBalance1);
             console.log("------------");
 
-            await mntContract.approve(powhContractAddress, buyer1TokenBalance1, { from: buyer1, gas: 2900000});
-            await mntContract.approve(powhContractAddress, buyer2TokenBalance1, { from: buyer2, gas: 2900000});
-            await mntContract.approve(powhContractAddress, buyer3TokenBalance1, { from: buyer3, gas: 2900000});
+            await mntContract.approve(mraContractAddress, buyer1TokenBalance1, { from: buyer1, gas: 2900000});
+            await mntContract.approve(mraContractAddress, buyer2TokenBalance1, { from: buyer2, gas: 2900000});
+            await mntContract.approve(mraContractAddress, buyer3TokenBalance1, { from: buyer3, gas: 2900000});
 
-            await powhContract.sell(buyer1TokenBalance1, { from: buyer1, gas: 2900000});
-            await powhContract.sell(buyer2TokenBalance1, { from: buyer2, gas: 2900000});
-            await powhContract.sell(buyer3TokenBalance1, { from: buyer3, gas: 2900000});
+            await mraContract.sell(buyer1TokenBalance1, { from: buyer1, gas: 2900000});
+            await mraContract.sell(buyer2TokenBalance1, { from: buyer2, gas: 2900000});
+            await mraContract.sell(buyer3TokenBalance1, { from: buyer3, gas: 2900000});
 
-            var buyer1TokenBalance2 = await powhContract.getCurrentUserTokenBalance({ from: buyer1 });
-            var buyer2TokenBalance2 = await powhContract.getCurrentUserTokenBalance({ from: buyer2 });
-            var buyer3TokenBalance2 = await powhContract.getCurrentUserTokenBalance({ from: buyer3 });
+            var buyer1TokenBalance2 = await mraContract.getCurrentUserTokenBalance({ from: buyer1 });
+            var buyer2TokenBalance2 = await mraContract.getCurrentUserTokenBalance({ from: buyer2 });
+            var buyer3TokenBalance2 = await mraContract.getCurrentUserTokenBalance({ from: buyer3 });
 
             console.log("buyer1TokenBalance2 " + buyer1TokenBalance2);
             console.log("buyer2TokenBalance2 " + buyer2TokenBalance2);
             console.log("buyer3TokenBalance2 " + buyer3TokenBalance2);
             console.log("------------");
 
-            var tokenPrice2 = await powhContract.get1TokenBuyPrice();
+            var tokenPrice2 = await mraContract.get1TokenBuyPrice();
             console.log("tokenPrice2 " + tokenPrice2);
         }
 
         //withdraw all rewards
         {
-            await powhContract.withdraw({ from: buyer1 });
-            await powhContract.withdraw({ from: buyer2 });
-            await powhContract.withdraw({ from: buyer3 });
+            await mraContract.withdraw({ from: buyer1 });
+            await mraContract.withdraw({ from: buyer2 });
+            await mraContract.withdraw({ from: buyer3 });
         }
-        var powhContractEthBalance = web3.eth.getBalance(powhContractAddress);
-        console.log("powhContractEthBalance " + powhContractEthBalance);
+        var mraContractEthBalance = web3.eth.getBalance(mraContractAddress);
+        console.log("mraContractEthBalance " + mraContractEthBalance);
 
-        var buyer1Reward2 = await powhContract.getUserReward(true, { from: buyer1 });
-        var buyer2Reward2 = await powhContract.getUserReward(true, { from: buyer2 });
-        var buyer3Reward2 = await powhContract.getUserReward(true, { from: buyer3 });
+        var buyer1Reward2 = await mraContract.getUserReward(true, { from: buyer1 });
+        var buyer2Reward2 = await mraContract.getUserReward(true, { from: buyer2 });
+        var buyer3Reward2 = await mraContract.getUserReward(true, { from: buyer3 });
 
         console.log("buyer1Reward " + buyer1Reward2.toString(10));
         console.log("buyer2Reward " + buyer2Reward2.toString(10));
@@ -439,14 +432,14 @@ return;
         var totalUserReward = buyer1Reward2.add(buyer2Reward2).add(buyer3Reward2);
         console.log("totalUserReward " + totalUserReward);
 
-        var devReward = await powhContract.getDevReward();
+        var devReward = await mraContract.getDevReward();
 
-        var saldo = powhContractEthBalance.sub(totalUserReward).sub(devReward);
+        var saldo = mraContractEthBalance.sub(totalUserReward).sub(devReward);
 
         console.log("devReward " + devReward);
         console.log("saldo " + saldo);
 
-        assert(powhContractEthBalance.sub(totalUserReward).sub(devReward) >= 0);
+        assert(mraContractEthBalance.sub(totalUserReward).sub(devReward) >= 0);
 
     });
 });

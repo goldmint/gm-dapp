@@ -1,20 +1,32 @@
 pragma solidity ^0.4.18;
 
-contract FloatMath {
+contract MintaramaPriceTest {
 
     int128 _tokenPrice;
+    int40 internal _priceSpeedPercent = 5;
+    int40 internal _priceSpeedTokenBlock = 10000;
 
-    function FloatMath() public {
+    function MintaramaPriceTest() public {
         _tokenPrice = RealMath.toReal(1);
     }
 
-    function updatePrice(int128 real_arg) public {
-        _tokenPrice = RealMath.mul(_tokenPrice, RealMath.exp(real_arg));
+    function updatePrice(int40 tokenAmount) public {
+        _tokenPrice = RealMath.mul(_tokenPrice, tokenExp(tokenAmount));
+    }
+
+    function tokenExp(int40 tokenAmount) public view returns(int128) {
+        int128 realTokenAmount = RealMath.toReal(tokenAmount);
+        int128 realPercent = RealMath.div(RealMath.toReal(_priceSpeedPercent), RealMath.toReal(100));
+        int128 realSpeed = RealMath.div(realPercent, RealMath.toReal(_priceSpeedTokenBlock));
+        int128 expArg = RealMath.mul(realTokenAmount, realSpeed);
+        return RealMath.exp(expArg);
     }
 
     function getPrice() public view returns(int128) {
-        return _tokenPrice;
+        return (_tokenPrice);
     }
+
+     
 }
 
 library RealMath {
@@ -140,12 +152,7 @@ library RealMath {
     function fpartSigned(int128 real_value) internal pure returns (int128) {
         // This gets the fractional part but strips the sign
         int128 fractional = fpart(real_value);
-        if (real_value < 0) {
-            // Add the negative sign back in.
-            return -fractional;
-        } else {
-            return fractional;
-        }
+        return real_value < 0 ? -fractional : fractional;
     }
     
     /**
@@ -226,7 +233,6 @@ library RealMath {
     function exp(int128 real_arg) internal pure returns (int128) {
         return expLimited(real_arg, 100);
     }
-    
-
+     
 }
 

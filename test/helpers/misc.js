@@ -659,9 +659,9 @@ function deployGoldContract(data,cb){
      });
 }
 
-function deployGoldmintPowhContract(data,cb){
-     var file = './contracts/GoldmintPowh.sol';
-     var contractName = ':GoldmintPowh';
+function deployMintaramaContract(data,cb){
+     var file = './contracts/Mintarama.sol';
+     var contractName = ':Mintarama';
 
      fs.readFile(file, function(err, result){
           assert.equal(err,null);
@@ -705,11 +705,11 @@ function deployGoldmintPowhContract(data,cb){
                          assert.equal(err, null);
                          assert.notEqual(result, null);
 
-                         powhContractAddress = result.contractAddress;
-                         powhContract = web3.eth.contract(abi).at(powhContractAddress);
+                         mraContractAddress = result.contractAddress;
+                         mraContract = web3.eth.contract(abi).at(mraContractAddress);
 
-                         console.log('Goldmint POWH Contract address: ');
-                         console.log(powhContractAddress);
+                         console.log('Goldmint Mintarama Contract address: ');
+                         console.log(mraContractAddress);
 
                          if(!alreadyCalled){
                               alreadyCalled = true;
@@ -722,9 +722,9 @@ function deployGoldmintPowhContract(data,cb){
 }
 
 
-function deployFloatMathContract(data,cb){
-    var file = './contracts/FloatMath.sol';
-    var contractName = ':FloatMath';
+function deployMintaramaPriceTestContract(data,cb){
+    var file = './contracts/MintaramaPriceTest.sol';
+    var contractName = ':MintaramaPriceTest';
 
     fs.readFile(file, function(err, result){
         assert.equal(err,null);
@@ -767,11 +767,11 @@ function deployFloatMathContract(data,cb){
                         assert.equal(err, null);
                         assert.notEqual(result, null);
 
-                        floatMathContractAddress = result.contractAddress;
-                        floatMathContract = web3.eth.contract(abi).at(floatMathContractAddress);
+                        mptContractAddress = result.contractAddress;
+                        mptContract = web3.eth.contract(abi).at(mptContractAddress);
 
-                        console.log('FloatMath Contract address: ');
-                        console.log(floatMathContractAddress);
+                        console.log('MintaramaPriceTest Contract address: ');
+                        console.log(mptContractAddress);
 
                         if(!alreadyCalled){
                             alreadyCalled = true;

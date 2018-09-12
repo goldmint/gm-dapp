@@ -1,6 +1,6 @@
 pragma solidity ^0.4.18;
 
-contract GoldmintPowh {
+contract Mintarama {
 
     IMNTP _mntpToken;
 
@@ -39,6 +39,10 @@ contract GoldmintPowh {
 
     mapping(bytes32 => bool) public _administrators;
     
+    uint256 internal _tokenPrice;
+    uint8 internal _priceSpeedPercent = 5;
+    uint8 internal _priceSpeedTokenBlock = 10000;
+
     uint256 internal _totalSupply;
 
     uint256 internal _initBlockNum;
@@ -100,7 +104,7 @@ contract GoldmintPowh {
 
 
 
-    function GoldmintPowh(address mntpTokenAddress) public {
+    function Mintarama(address mntpTokenAddress) public {
         _mntpToken = IMNTP(mntpTokenAddress);
         _administrators[keccak256(msg.sender)] = true;
         _initBlockNum = block.number;
@@ -193,8 +197,6 @@ contract GoldmintPowh {
         return taxedEth;
     }   
 
-
-
     /* HELPERS */
 
     function getTotalFeePercent() public pure returns(uint256) {
@@ -220,6 +222,10 @@ contract GoldmintPowh {
     function getQuickPromoPercent() public pure returns(uint256) {
         return QUICK_PROMO_PERCENT;
     }  
+
+    function getCurrentTokenPrice() public view returns(uint256) {
+        return _tokenPrice;
+    }
 
     function getTotalEthBalance() public view returns(uint256) {
         return this.balance;
@@ -318,15 +324,9 @@ contract GoldmintPowh {
         return _devReward;
     }
 
-    function getBlockNum() public view returns(uint256) {
+    function getBlockNum() public returns(uint256) {
         return block.number;
     }
-
-    uint256 _testInc = 0;
-    function nextBlock() public {
-        _testInc++;
-    }
-
     
     // INTERNAL FUNCTIONS
 
@@ -423,6 +423,11 @@ contract GoldmintPowh {
         return true;     
     }
 
+    function updateTokenPrice(int128 tokenAmount) internal {
+        int128 exp = RealMath.
+        _tokenPrice = RealMath.mul(_tokenPrice, RealMath.exp(tokenAmount * (_priceSpeed / 100) / _priceSpeedTokenBlock));
+    }
+
     function ethToTokens(uint256 ethAmount) internal view returns(uint256) {
         uint256 tokenPriceInitial = TOKEN_PRICE_INITIAL * 1e18;
         uint256 tokensReceived = 
@@ -466,6 +471,7 @@ contract GoldmintPowh {
 
         return ethAmount;
     }
+
 
     function calcTotalFee(uint256 ethAmount) internal pure returns(uint256) {
         return calcPercent(ethAmount, TOTAL_FEE_PERCENT);
@@ -518,12 +524,28 @@ library SafeMath {
         return c;
     }
 
+    function mul(uint128 a, uint128 b) internal pure returns (uint128) {
+        if (a == 0) {
+            return 0;
+        }
+        uint128 c = a * b;
+        assert(c / a == b);
+        return c;
+    }
+
     /**
     * @dev Integer division of two numbers, truncating the quotient.
     */
     function div(uint256 a, uint256 b) internal pure returns (uint256) {
         // assert(b > 0); // Solidity automatically throws when dividing by 0
         uint256 c = a / b;
+        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+        return c;
+    }
+
+    function div(uint128 a, uint128 b) internal pure returns (uint128) {
+        // assert(b > 0); // Solidity automatically throws when dividing by 0
+        uint128 c = a / b;
         // assert(a == b * c + a % b); // There is no case in which this doesn't hold
         return c;
     }
@@ -536,11 +558,22 @@ library SafeMath {
         return a - b;
     }
 
+    function sub(uint128 a, uint128 b) internal pure returns (uint128) {
+        assert(b <= a);
+        return a - b;
+    }
+
     /**
     * @dev Adds two numbers, throws on overflow.
     */
     function add(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a + b;
+        assert(c >= a);
+        return c;
+    }
+
+    function add(uint128 a, uint128 b) internal pure returns (uint128) {
+        uint128 c = a + b;
         assert(c >= a);
         return c;
     }
@@ -557,10 +590,6 @@ library SafeMath {
 
 library RealMath {
     
-    /**
-     * This lib is taken from https://github.com/NovakDistributed/macroverse/blob/master/contracts/RealMath.sol and a bit modified
-     */
-
     /**
      * How many total bits are there?
      */
@@ -682,12 +711,7 @@ library RealMath {
     function fpartSigned(int128 real_value) internal pure returns (int128) {
         // This gets the fractional part but strips the sign
         int128 fractional = fpart(real_value);
-        if (real_value < 0) {
-            // Add the negative sign back in.
-            return -fractional;
-        } else {
-            return fractional;
-        }
+        return real_value < 0 ? -fractional : fractional;
     }
     
     /**
@@ -768,5 +792,6 @@ library RealMath {
     function exp(int128 real_arg) internal pure returns (int128) {
         return expLimited(real_arg, 100);
     }
+     
 }
 
