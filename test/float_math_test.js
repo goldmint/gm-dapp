@@ -61,7 +61,8 @@ describe('FLOAT_MATH', function() {
 
         var expectedTokenPrice = 1;
         var totalTokenBalance = 0;
-        console.log(await mptContract.getPrice());
+        console.log(realMath.toReal(6));
+        console.log(realMath.toReal(-6));
         for (var dealNum = 0; dealNum < 10000; dealNum++) {
             var tokenAmount = getRandomInt(-1000, 1000);
             if (tokenAmount == 0) continue;
@@ -72,6 +73,11 @@ describe('FLOAT_MATH', function() {
             await mptContract.updatePrice(tokenAmount, { from: buyer1 });
 
             var realTokenPrice = realMath.fromReal(await mptContract.getPrice());
+
+            var ethAmount = realMath.fromReal(await mptContract.tokensToRealEth1(tokenAmount));
+            var ethAmount1 = (await mptContract.tokensToEth1(tokenAmount)) / 10e18;
+
+            console.log("ethAmount: " + ethAmount + "; ethAmount1: " + ethAmount1.toString(10));
 
             console.log("dealNum: " + (dealNum + 1) + "; tokenAmount: " + tokenAmount + "; expected token price: " + expectedTokenPrice + "; realTokenPrice: " + realTokenPrice + "; token balance: " + totalTokenBalance);
 

@@ -472,6 +472,28 @@ contract Mintarama {
         return ethAmount;
     }
 
+    function tokensToEth1(int40 tokenAmount) internal view returns(int128) {
+        return SafeMath.mul(int256(RealMath.fromReal(RealMath.round(RealMath.mul(RealMath.mul(RealMath.toReal(tokenAmount), calc1TokenRate(tokenAmount)), RealMath.toReal(1e5))))), 10e13);
+    }
+
+
+    function calc1TokenRateFromTokens(int40 tokenAmount) internal view returns(int128) {
+        int128 realTokenAmount = RealMath.toReal(tokenAmount);
+        int128 realPercent = RealMath.div(RealMath.toReal(_priceSpeedPercent), RealMath.toReal(100));
+        int128 realSpeed = RealMath.div(realPercent, RealMath.toReal(_priceSpeedTokenBlock));
+        int128 expArg = RealMath.mul(realTokenAmount, realSpeed);
+
+        return RealMath.mul(_tokenPrice, RealMath.exp(expArg));
+    }
+
+    function calc1TokenRateFromEth(int40 ethAmount) internal view returns(int128) {
+        int128 realTokenAmount = RealMath.toReal(tokenAmount);
+        int128 realPercent = RealMath.div(RealMath.toReal(_priceSpeedPercent), RealMath.toReal(100));
+        int128 realSpeed = RealMath.div(realPercent, RealMath.toReal(_priceSpeedTokenBlock));
+        int128 expArg = RealMath.mul(realTokenAmount, realSpeed);
+
+        return RealMath.mul(_tokenPrice, RealMath.exp(expArg));
+    }
 
     function calcTotalFee(uint256 ethAmount) internal pure returns(uint256) {
         return calcPercent(ethAmount, TOTAL_FEE_PERCENT);
