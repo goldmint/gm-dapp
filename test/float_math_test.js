@@ -57,31 +57,35 @@ describe('FLOAT_MATH', function() {
 
     it('should check token price calculations', async() => {
         
-        var priceSpeed = 0.05 / 10000;
+        var priceSpeed = 0.05 / 20000;
 
         var expectedTokenPrice = 1;
         var totalTokenBalance = 0;
-        console.log(realMath.toReal(6));
-        console.log(realMath.toReal(-6));
+        var startPrice = 0.01;
+
         for (var dealNum = 0; dealNum < 10000; dealNum++) {
             var tokenAmount = getRandomInt(-1000, 1000);
             if (tokenAmount == 0) continue;
             totalTokenBalance += tokenAmount;
             
-            expectedTokenPrice = Math.exp(totalTokenBalance * priceSpeed);
+            expectedTokenPrice = startPrice * Math.exp(totalTokenBalance * priceSpeed);
 
             await mptContract.updatePrice(tokenAmount, { from: buyer1 });
 
             var realTokenPrice = realMath.fromReal(await mptContract.getPrice());
 
-            var ethAmount = realMath.fromReal(await mptContract.tokensToRealEth1(tokenAmount));
-            var ethAmount1 = (await mptContract.tokensToEth1(tokenAmount)) / 10e18;
+            var realTokensToRealEth = realMath.fromReal(await mptContract.realTokensToRealEth(realMath.toReal(tokenAmount)));
+            var realTokensToEth = (await mptContract.realTokensToEth(realMath.toReal(tokenAmount))) / 10e18;
 
-            console.log("ethAmount: " + ethAmount + "; ethAmount1: " + ethAmount1.toString(10));
+            var realEthToRealTokens = realMath.fromReal(await mptContract.realEthToRealTokens(realMath.toReal(realTokensToRealEth)));
+            var realEthToTokens = (await mptContract.realEthToTokens(realMath.toReal(realTokensToRealEth))) / 10e18;
+
+
+            console.log("realTokensToRealEth: " + realTokensToRealEth + "; realTokensToEth: " + realTokensToEth + "; realEthToRealTokens: " + realEthToRealTokens + "; realEthToTokens: " + realEthToTokens);
 
             console.log("dealNum: " + (dealNum + 1) + "; tokenAmount: " + tokenAmount + "; expected token price: " + expectedTokenPrice + "; realTokenPrice: " + realTokenPrice + "; token balance: " + totalTokenBalance);
 
-            assert(Math.abs(expectedTokenPrice - realTokenPrice) <= 1E-12,  "token price of DealNum=" + dealNum + " should be approximately equal " + expectedTokenPrice + "; realTokenPrice=" + realTokenPrice);
+            assert(Math.abs(expectedTokenPrice - realTokenPrice) <= 1E-12,  "DealNum=" + dealNum + ". Token price should be ~= " + expectedTokenPrice + "; realTokenPrice=" + realTokenPrice);
         }
 
     });
