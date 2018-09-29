@@ -6,23 +6,25 @@ contract Mintarama {
 
     uint256 constant internal MAGNITUDE = 2**64;
 
-    uint8 constant internal TOTAL_FEE_PERCENT = 10;
+    uint8 constant public TOTAL_FEE_PERCENT = 10;
 
-    uint8 constant internal DEV_REWARD_PERCENT = 40;
-    uint8 constant internal MNTP_REWARD_PERCENT = 30;
-    uint8 constant internal REF_BONUS_PERCENT = 20;
-    uint8 constant internal BIG_PROMO_PERCENT = 5;
-    uint8 constant internal QUICK_PROMO_PERCENT = 5;
+    uint8 constant public DEV_REWARD_PERCENT = 40;
+    uint8 constant public MNTP_REWARD_PERCENT = 30;
+    uint8 constant public REF_BONUS_PERCENT = 20;
+    uint8 constant public BIG_PROMO_PERCENT = 5;
+    uint8 constant public QUICK_PROMO_PERCENT = 5;
 
-    uint128 constant internal BIG_PROMO_BLOCK_INTERVAL = 9999;
-    uint128 constant internal QUICK_PROMO_BLOCK_INTERVAL = 100;
-    uint128 constant internal PROMO_MIN_PURCHASE = 100;
+    uint128 constant public BIG_PROMO_BLOCK_INTERVAL = 9999;
+    uint128 constant public QUICK_PROMO_BLOCK_INTERVAL = 100;
+    uint128 constant public PROMO_MIN_PURCHASE = 100;
+
+    int40 constant public PRICE_SPEED_PERCENT = 5;
+    int40 constant public PRICE_SPEED_TOKEN_BLOCK = 10000;
 
 
-
-    uint256 constant internal TOKEN_PRICE_INITIAL = 0.01 ether;
-    uint256 constant internal TOKEN_PRICE_INC = 0.00000001 ether;
-    uint256 constant internal MIN_REF_TOKEN_AMOUNT = 1 ether;
+    uint256 constant public TOKEN_PRICE_INITIAL = 0.01 ether;
+    uint256 constant public TOKEN_PRICE_INC = 0.00000001 ether;
+    uint256 constant public MIN_REF_TOKEN_AMOUNT = 1 ether;
 
     
     // ambassador program
@@ -39,11 +41,8 @@ contract Mintarama {
 
     mapping(bytes32 => bool) public _administrators;
     
-    uint256 internal _tokenPrice;
-    uint8 internal _priceSpeedPercent = 5;
-    uint8 internal _priceSpeedTokenBlock = 10000;
-
     uint256 internal _totalSupply;
+    int128 internal _realTokenPrice;
 
     uint256 internal _initBlockNum;
     uint256 internal _bonusPerMntp;
@@ -103,11 +102,11 @@ contract Mintarama {
     }
 
 
-
     function Mintarama(address mntpTokenAddress) public {
         _mntpToken = IMNTP(mntpTokenAddress);
         _administrators[keccak256(msg.sender)] = true;
         _initBlockNum = block.number;
+        _realTokenPrice = convert256ToReal(TOKEN_PRICE_INITIAL);
     }
     
     function setTotalSupply(uint256 totalTokenAmount) public onlyAdministrator {
@@ -177,13 +176,14 @@ contract Mintarama {
      * sell tokens for eth
      */
     function sell(uint256 tokenAmount) onlyContractUsers() public returns(uint256) {
+        
         if (tokenAmount > getCurrentUserTokenBalance() || tokenAmount == 0) return;
+
 
         uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0;
 
         (taxedEth, ethAmount, totalFeeEth) = estimateSellOrder(tokenAmount);
 
-        
         subUserTokens(msg.sender, tokenAmount);
 
         // add reward to the user for the transaction
@@ -192,39 +192,21 @@ contract Mintarama {
 
         msg.sender.transfer(taxedEth);
         
+        updateTokenPrice(-convert256ToReal(tokenAmount));
+        
         onTokenSell(msg.sender, tokenAmount, taxedEth);
 
         return taxedEth;
     }   
 
-    /* HELPERS */
-
-    function getTotalFeePercent() public pure returns(uint256) {
-        return TOTAL_FEE_PERCENT;
-    }
-
-    function getDevRewardPercent() public pure returns(uint256) {
-        return DEV_REWARD_PERCENT;
-    }
-
-    function getShareRewardPercent() public pure returns(uint256) {
-        return MNTP_REWARD_PERCENT;
-    }   
-
-    function getRefBonusPercent() public pure returns(uint256) {
-        return REF_BONUS_PERCENT;
-    }   
-
-    function getBigPromoPercent() public pure returns(uint256) {
-        return BIG_PROMO_PERCENT;
-    }   
-
-    function getQuickPromoPercent() public pure returns(uint256) {
-        return QUICK_PROMO_PERCENT;
-    }  
+    /* HELPERS */  
 
     function getCurrentTokenPrice() public view returns(uint256) {
-        return _tokenPrice;
+        return convertRealTo256(_realTokenPrice);
+    }
+
+    function getRealCurrentTokenPrice() public view returns(int128) {
+        return _realTokenPrice;
     }
 
     function getTotalEthBalance() public view returns(uint256) {
@@ -298,14 +280,14 @@ contract Mintarama {
     function estimateBuyOrder(uint256 ethAmount) public view returns(uint256, uint256, uint256) {
         uint256 totalFeeEth = calcTotalFee(ethAmount);
         uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
-        uint256 tokenAmount = ethToTokens(taxedEth);
+        uint256 tokenAmount = realEthToTokens(convert256ToReal(taxedEth));
 
         return (tokenAmount, totalFeeEth, taxedEth);
     }
     
 
     function estimateSellOrder(uint256 tokenAmount) public view returns(uint256, uint256, uint256) {
-        uint256 ethAmount = tokensToEth(tokenAmount);
+        uint256 ethAmount = tokensToEth(convert256ToReal(tokenAmount));
         uint256 totalFeeEth = calcTotalFee(ethAmount);
         uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
 
@@ -324,16 +306,22 @@ contract Mintarama {
         return _devReward;
     }
 
-    function getBlockNum() public returns(uint256) {
+    function getBlockNum() public view returns(uint256) {
         return block.number;
     }
-    
+
+    function getRealPriceSpeed() public view returns(int128) {
+        int128 realPercent = RealMath.div(RealMath.toReal(PRICE_SPEED_PERCENT), RealMath.toReal(100));
+        return RealMath.div(realPercent, RealMath.toReal(PRICE_SPEED_TOKEN_BLOCK));
+    }
+   
     // INTERNAL FUNCTIONS
 
+    
     function purchaseTokens(uint256 ethAmount, address refAddress) internal returns(uint256) {
+
         uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0;
         (tokenAmount, totalFeeEth, taxedEth) = estimateBuyOrder(ethAmount);
-
         require(tokenAmount > 0 && (SafeMath.add(tokenAmount, getTotalTokenSold()) > getTotalTokenSold()));
 
         if (refAddress == msg.sender || getUserTokenBalance(refAddress) < MIN_REF_TOKEN_AMOUNT) refAddress = 0x0;
@@ -348,7 +336,9 @@ contract Mintarama {
         _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], SafeMath.sub(getUserReward(false), userRewardBefore) * MAGNITUDE);
         
         checkAndSendPromoBonus(tokenAmount);
-
+        
+        updateTokenPrice(convert256ToReal(tokenAmount));
+        
         onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
         return tokenAmount;
@@ -423,78 +413,45 @@ contract Mintarama {
         return true;     
     }
 
-    function updateTokenPrice(int128 tokenAmount) internal {
-        int128 exp = RealMath.
-        _tokenPrice = RealMath.mul(_tokenPrice, RealMath.exp(tokenAmount * (_priceSpeed / 100) / _priceSpeedTokenBlock));
+    function updateTokenPrice(int128 realTokenAmount) internal {
+        _realTokenPrice = calc1RealTokenRateFromRealTokens(realTokenAmount);
     }
 
-    function ethToTokens(uint256 ethAmount) internal view returns(uint256) {
-        uint256 tokenPriceInitial = TOKEN_PRICE_INITIAL * 1e18;
-        uint256 tokensReceived = 
-         (
-            (
-                // underflow attempts BTFO
-                SafeMath.sub(
-                    (SafeMath.sqrt
-                        (
-                            (tokenPriceInitial**2)
-                            +
-                            (2*(TOKEN_PRICE_INC * 1e18)*(ethAmount * 1e18))
-                            +
-                            (((TOKEN_PRICE_INC)**2)*(getRemainTokenAmount()**2))
-                            +
-                            (2*(TOKEN_PRICE_INC)*tokenPriceInitial*getRemainTokenAmount())
-                        )
-                    ), tokenPriceInitial
-                )
-            )/(TOKEN_PRICE_INC)
-        )-(getRemainTokenAmount())
-        ;
-  
-        return tokensReceived;
+    function realEthToTokens(int128 realEthAmount) internal view returns(uint256) {
+
+        int128 t0 = RealMath.div(realEthAmount, _realTokenPrice);
+        int128 s = RealMath.div(getRealPriceSpeed(), RealMath.toReal(2));
+        int128 tns = RealMath.mul(t0, s);
+        int128 exptns = RealMath.exp(tns);
+
+        int128 tn0 = t0;
+
+        for (uint i = 0; i < 10; i++) {
+
+            int128 tn1 = RealMath.div(
+                RealMath.mul( RealMath.mul(RealMath.ipow(t0, 2), s), exptns ) + t0,
+                RealMath.mul( exptns, RealMath.toReal(1) + tns )
+            );
+
+            if (RealMath.abs(tn0-tn1) < RealMath.div(RealMath.toReal(1), RealMath.toReal(10e10))) break;
+
+            tn0 = tn1;
+        }
+
+
+        return convertRealTo256(tn0);
     }
 
-    function tokensToEth(uint256 tokenAmount) internal view returns(uint256) {
-        uint256 tokens = (tokenAmount + 1e18);
-        uint256 ethAmount =
-        (
-            SafeMath.sub(
-                (
-                    (
-                        (
-                            TOKEN_PRICE_INITIAL + (TOKEN_PRICE_INC * (getTotalTokenSold()/1e18))
-                        )-TOKEN_PRICE_INC
-                    )*(tokens - 1e18)
-                ),(TOKEN_PRICE_INC*((tokens**2-tokens)/1e18))/2
-            )
-        /1e18);
-
-        return ethAmount;
+    function tokensToEth(int128 realTokenAmount) internal view returns(uint256) {
+        return convertRealTo256(RealMath.mul(realTokenAmount, calc1RealTokenRateFromRealTokens(realTokenAmount)));
     }
 
-    function tokensToEth1(int40 tokenAmount) internal view returns(int128) {
-        return SafeMath.mul(int256(RealMath.fromReal(RealMath.round(RealMath.mul(RealMath.mul(RealMath.toReal(tokenAmount), calc1TokenRate(tokenAmount)), RealMath.toReal(1e5))))), 10e13);
+    function calc1RealTokenRateFromRealTokens(int128 realTokenAmount) internal view returns(int128) {
+        int128 expArg = RealMath.mul(realTokenAmount, getRealPriceSpeed());
+
+        return RealMath.mul(_realTokenPrice, RealMath.exp(expArg));
     }
-
-
-    function calc1TokenRateFromTokens(int40 tokenAmount) internal view returns(int128) {
-        int128 realTokenAmount = RealMath.toReal(tokenAmount);
-        int128 realPercent = RealMath.div(RealMath.toReal(_priceSpeedPercent), RealMath.toReal(100));
-        int128 realSpeed = RealMath.div(realPercent, RealMath.toReal(_priceSpeedTokenBlock));
-        int128 expArg = RealMath.mul(realTokenAmount, realSpeed);
-
-        return RealMath.mul(_tokenPrice, RealMath.exp(expArg));
-    }
-
-    function calc1TokenRateFromEth(int40 ethAmount) internal view returns(int128) {
-        int128 realTokenAmount = RealMath.toReal(tokenAmount);
-        int128 realPercent = RealMath.div(RealMath.toReal(_priceSpeedPercent), RealMath.toReal(100));
-        int128 realSpeed = RealMath.div(realPercent, RealMath.toReal(_priceSpeedTokenBlock));
-        int128 expArg = RealMath.mul(realTokenAmount, realSpeed);
-
-        return RealMath.mul(_tokenPrice, RealMath.exp(expArg));
-    }
-
+    
     function calcTotalFee(uint256 ethAmount) internal pure returns(uint256) {
         return calcPercent(ethAmount, TOTAL_FEE_PERCENT);
     } 
@@ -522,7 +479,21 @@ contract Mintarama {
     function calcPercent(uint256 amount, uint8 percent) internal pure returns(uint256) {
         return SafeMath.mul(SafeMath.div(amount, 100), percent);
     }
+    
+    /*
+    * Converts real num to uint256. Works only with positive numbers. Occurancy is 5 fractional digits.
+    */
 
+    function convertRealTo256(int128 realVal) public pure returns(uint256){
+        return SafeMath.mul(uint256(RealMath.fromReal(RealMath.round(RealMath.mul(realVal, RealMath.toReal(1e5))))), uint(1e13));
+    }
+
+    /*
+    * Converts uint256 to real num. Occurancy is 5 fractional digits.
+    */
+    function convert256ToReal(uint256 val) public pure returns(int128) {
+        return RealMath.div(RealMath.toReal(int40(SafeMath.div(val, 1e13))), RealMath.toReal(int40(1e5)));
+    }   
 }
 
 
@@ -609,6 +580,7 @@ library SafeMath {
         }
     }        
 }
+
 
 library RealMath {
     
@@ -768,7 +740,188 @@ library RealMath {
     function fraction(int40 numerator, int40 denominator) internal pure returns (int128) {
         return div(toReal(numerator), toReal(denominator));
     }
-
+    
+    // Now we have some fancy math things (like pow and trig stuff). This isn't
+    // in the RealMath that was deployed with the original Macroverse
+    // deployment, so it needs to be linked into your contract statically.
+    
+    /**
+     * Raise a number to a positive integer power in O(log power) time.
+     * See <https://stackoverflow.com/a/101613>
+     */
+    function ipow(int128 real_base, int40 exponent) internal pure returns (int128) {
+        if (exponent < 0) {
+            // Negative powers are not allowed here.
+            revert();
+        }
+        
+        // Start with the 0th power
+        int128 real_result = REAL_ONE;
+        while (exponent != 0) {
+            // While there are still bits set
+            if ((exponent & 0x1) == 0x1) {
+                // If the low bit is set, multiply in the (many-times-squared) base
+                real_result = mul(real_result, real_base);
+            }
+            // Shift off the low bit
+            exponent = exponent >> 1;
+            // Do the squaring
+            real_base = mul(real_base, real_base);
+        }
+        
+        // Return the final result.
+        return real_result;
+    }
+    
+    /**
+     * Zero all but the highest set bit of a number.
+     * See <https://stackoverflow.com/a/53184>
+     */
+    function hibit(uint256 val) internal pure returns (uint256) {
+        // Set all the bits below the highest set bit
+        val |= (val >>  1);
+        val |= (val >>  2);
+        val |= (val >>  4);
+        val |= (val >>  8);
+        val |= (val >> 16);
+        val |= (val >> 32);
+        val |= (val >> 64);
+        val |= (val >> 128);
+        return val ^ (val >> 1);
+    }
+    
+    /**
+     * Given a number with one bit set, finds the index of that bit.
+     */
+    function findbit(uint256 val) internal pure returns (uint8 index) {
+        index = 0;
+        // We and the value with alternating bit patters of various pitches to find it.
+        
+        if (val & 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA != 0) {
+            // Picth 1
+            index |= 1;
+        }
+        if (val & 0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC != 0) {
+            // Pitch 2
+            index |= 2;
+        }
+        if (val & 0xF0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0 != 0) {
+            // Pitch 4
+            index |= 4;
+        }
+        if (val & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00 != 0) {
+            // Pitch 8
+            index |= 8;
+        }
+        if (val & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000 != 0) {
+            // Pitch 16
+            index |= 16;
+        }
+        if (val & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000 != 0) {
+            // Pitch 32
+            index |= 32;
+        }
+        if (val & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000 != 0) {
+            // Pitch 64
+            index |= 64;
+        }
+        if (val & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000000000000000000000000000 != 0) {
+            // Pitch 128
+            index |= 128;
+        }
+    }
+    
+    /**
+     * Shift real_arg left or right until it is between 1 and 2. Return the
+     * rescaled value, and the number of bits of right shift applied. Shift may be negative.
+     *
+     * Expresses real_arg as real_scaled * 2^shift, setting shift to put real_arg between [1 and 2).
+     *
+     * Rejects 0 or negative arguments.
+     */
+    function rescale(int128 real_arg) internal pure returns (int128 real_scaled, int40 shift) {
+        if (real_arg <= 0) {
+            // Not in domain!
+            revert();
+        }
+        
+        // Find the high bit
+        int40 high_bit = findbit(hibit(uint256(real_arg)));
+        
+        // We'll shift so the high bit is the lowest non-fractional bit.
+        shift = high_bit - int40(REAL_FBITS);
+        
+        if (shift < 0) {
+            // Shift left
+            real_scaled = real_arg << -shift;
+        } else if (shift >= 0) {
+            // Shift right
+            real_scaled = real_arg >> shift;
+        }
+    }
+    
+    /**
+     * Calculate the natural log of a number. Rescales the input value and uses
+     * the algorithm outlined at <https://math.stackexchange.com/a/977836> and
+     * the ipow implementation.
+     *
+     * Lets you artificially limit the number of iterations.
+     *
+     * Note that it is potentially possible to get an un-converged value; lack
+     * of convergence does not throw.
+     */
+    function lnLimited(int128 real_arg, int max_iterations) internal pure returns (int128) {
+        if (real_arg <= 0) {
+            // Outside of acceptable domain
+            revert();
+        }
+        
+        if (real_arg == REAL_ONE) {
+            // Handle this case specially because people will want exactly 0 and
+            // not ~2^-39 ish.
+            return 0;
+        }
+        
+        // We know it's positive, so rescale it to be between [1 and 2)
+        int128 real_rescaled;
+        int40 shift;
+        (real_rescaled, shift) = rescale(real_arg);
+        
+        // Compute the argument to iterate on
+        int128 real_series_arg = div(real_rescaled - REAL_ONE, real_rescaled + REAL_ONE);
+        
+        // We will accumulate the result here
+        int128 real_series_result = 0;
+        
+        for (int40 n = 0; n < max_iterations; n++) {
+            // Compute term n of the series
+            int128 real_term = div(ipow(real_series_arg, 2 * n + 1), toReal(2 * n + 1));
+            // And add it in
+            real_series_result += real_term;
+            if (real_term == 0) {
+                // We must have converged. Next term is too small to represent.
+                break;
+            }
+            // If we somehow never converge I guess we will run out of gas
+        }
+        
+        // Double it to account for the factor of 2 outside the sum
+        real_series_result = mul(real_series_result, REAL_TWO);
+        
+        // Now compute and return the overall result
+        return mul(toReal(shift), REAL_LN_TWO) + real_series_result;
+        
+    }
+    
+    /**
+     * Calculate a natural logarithm with a sensible maximum iteration count to
+     * wait until convergence. Note that it is potentially possible to get an
+     * un-converged value; lack of convergence does not throw.
+     */
+    function ln(int128 real_arg) internal pure returns (int128) {
+        return lnLimited(real_arg, 100);
+    }
+    
 
      /**
      * Calculate e^x. Uses the series given at
@@ -814,6 +967,153 @@ library RealMath {
     function exp(int128 real_arg) internal pure returns (int128) {
         return expLimited(real_arg, 100);
     }
-     
+    
+    /**
+     * Raise any number to any power, except for negative bases to fractional powers.
+     */
+    function pow(int128 real_base, int128 real_exponent) internal pure returns (int128) {
+        if (real_exponent == 0) {
+            // Anything to the 0 is 1
+            return REAL_ONE;
+        }
+        
+        if (real_base == 0) {
+            if (real_exponent < 0) {
+                // Outside of domain!
+                revert();
+            }
+            // Otherwise it's 0
+            return 0;
+        }
+        
+        if (fpart(real_exponent) == 0) {
+            // Anything (even a negative base) is super easy to do to an integer power.
+            
+            if (real_exponent > 0) {
+                // Positive integer power is easy
+                return ipow(real_base, fromReal(real_exponent));
+            } else {
+                // Negative integer power is harder
+                return div(REAL_ONE, ipow(real_base, fromReal(-real_exponent)));
+            }
+        }
+        
+        if (real_base < 0) {
+            // It's a negative base to a non-integer power.
+            // In general pow(-x^y) is undefined, unless y is an int or some
+            // weird rational-number-based relationship holds.
+            revert();
+        }
+        
+        // If it's not a special case, actually do it.
+        return exp(mul(real_exponent, ln(real_base)));
+    }
+    
+    /**
+     * Compute the square root of a number.
+     */
+    function sqrt(int128 real_arg) internal pure returns (int128) {
+        return pow(real_arg, REAL_HALF);
+    }
+    
+    /**
+     * Compute the sin of a number to a certain number of Taylor series terms.
+     */
+    function sinLimited(int128 real_arg, int40 max_iterations) internal pure returns (int128) {
+        // First bring the number into 0 to 2 pi
+        // TODO: This will introduce an error for very large numbers, because the error in our Pi will compound.
+        // But for actual reasonable angle values we should be fine.
+        real_arg = real_arg % REAL_TWO_PI;
+        
+        int128 accumulator = REAL_ONE;
+        
+        // We sum from large to small iteration so that we can have higher powers in later terms
+        for (int40 iteration = max_iterations - 1; iteration >= 0; iteration--) {
+            accumulator = REAL_ONE - mul(div(mul(real_arg, real_arg), toReal((2 * iteration + 2) * (2 * iteration + 3))), accumulator);
+            // We can't stop early; we need to make it to the first term.
+        }
+        
+        return mul(real_arg, accumulator);
+    }
+    
+    /**
+     * Calculate sin(x) with a sensible maximum iteration count to wait until
+     * convergence.
+     */
+    function sin(int128 real_arg) internal pure returns (int128) {
+        return sinLimited(real_arg, 15);
+    }
+    
+    /**
+     * Calculate cos(x).
+     */
+    function cos(int128 real_arg) internal pure returns (int128) {
+        return sin(real_arg + REAL_HALF_PI);
+    }
+    
+    /**
+     * Calculate tan(x). May overflow for large results. May throw if tan(x)
+     * would be infinite, or return an approximation, or overflow.
+     */
+    function tan(int128 real_arg) internal pure returns (int128) {
+        return div(sin(real_arg), cos(real_arg));
+    }
+    
+    /**
+     * Calculate atan(x) for x in [-1, 1].
+     * Uses the Chebyshev polynomial approach presented at
+     * https://www.mathworks.com/help/fixedpoint/examples/calculate-fixed-point-arctangent.html
+     * Uses polynomials received by personal communication.
+     * 0.999974x-0.332568x^3+0.193235x^5-0.115729x^7+0.0519505x^9-0.0114658x^11
+     */
+    function atanSmall(int128 real_arg) internal pure returns (int128) {
+        int128 real_arg_squared = mul(real_arg, real_arg);
+        return mul(mul(mul(mul(mul(mul(
+            - 12606780422,  real_arg_squared) // x^11
+            + 57120178819,  real_arg_squared) // x^9
+            - 127245381171, real_arg_squared) // x^7
+            + 212464129393, real_arg_squared) // x^5
+            - 365662383026, real_arg_squared) // x^3
+            + 1099483040474, real_arg);       // x^1
+    }
+    
+    /**
+     * Compute the nice two-component arctangent of y/x.
+     */
+    function atan2(int128 real_y, int128 real_x) internal pure returns (int128) {
+        int128 atan_result;
+        
+        // Do the angle correction shown at
+        // https://www.mathworks.com/help/fixedpoint/examples/calculate-fixed-point-arctangent.html
+        
+        // We will re-use these absolute values
+        int128 real_abs_x = abs(real_x);
+        int128 real_abs_y = abs(real_y);
+        
+        if (real_abs_x > real_abs_y) {
+            // We are in the (0, pi/4] region
+            // abs(y)/abs(x) will be in 0 to 1.
+            atan_result = atanSmall(div(real_abs_y, real_abs_x));
+        } else {
+            // We are in the (pi/4, pi/2) region
+            // abs(x) / abs(y) will be in 0 to 1; we swap the arguments
+            atan_result = REAL_HALF_PI - atanSmall(div(real_abs_x, real_abs_y));
+        }
+        
+        // Now we correct the result for other regions
+        if (real_x < 0) {
+            if (real_y < 0) {
+                atan_result -= REAL_PI;
+            } else {
+                atan_result = REAL_PI - atan_result;
+            }
+        } else {
+            if (real_y < 0) {
+                atan_result = -atan_result;
+            }
+        }
+        
+        return atan_result;
+    }    
 }
 

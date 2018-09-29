@@ -2,27 +2,25 @@ pragma solidity ^0.4.18;
 
 contract MintaramaPriceTest {
 
-    int128 _tokenPrice;
-    int128 _tokenAmount;
+    int128 _realTokenPrice;
     int40 internal _priceSpeedPercent = 5;
-    int40 internal _priceSpeedTokenBlock = 20000;
+    int40 internal _priceSpeedTokenBlock = 10000;
 
     function MintaramaPriceTest() public {
-        _tokenPrice = RealMath.div(RealMath.toReal(1), RealMath.toReal(100));
-        _tokenAmount = RealMath.toReal(0);
+        _realTokenPrice = RealMath.div(RealMath.toReal(1), RealMath.toReal(100));
     }
 
     function updatePrice(int40 tokenAmount) public {
-        _tokenPrice = calc1RealTokenRateFromRealTokens(RealMath.toReal(tokenAmount));
+        _realTokenPrice = calc1RealTokenRateFromRealTokens(RealMath.toReal(tokenAmount));
     }
     function getPrice() public view returns(int128) {
-        return (_tokenPrice);
+        return (_realTokenPrice);
     }
 
     function calc1RealTokenRateFromRealTokens(int128 realTokenAmount) internal view returns(int128) {
         int128 expArg = RealMath.mul(realTokenAmount, getRealPriceSpeed());
 
-        return RealMath.mul(_tokenPrice, RealMath.exp(expArg));
+        return RealMath.mul(_realTokenPrice, RealMath.exp(expArg));
     }
 
 
@@ -31,14 +29,14 @@ contract MintaramaPriceTest {
     }
 
     function realTokensToEth(int128 realTokenAmount) public view returns(int256) {
-        return int256(RealMath.fromReal(RealMath.round(RealMath.mul(RealMath.mul(realTokenAmount, calc1RealTokenRateFromRealTokens(realTokenAmount)), RealMath.toReal(1e5))))) * 10e13;
+        return convertRealTo256(RealMath.mul(realTokenAmount, calc1RealTokenRateFromRealTokens(realTokenAmount)));
     }
 
     function realEthToRealTokens(int128 realEthAmount) public view returns(int128) {
         
-        int128 t0 = RealMath.div(realEthAmount, _tokenPrice);
-        
-        int128 tns = RealMath.mul(t0, getRealPriceSpeed());
+        int128 t0 = RealMath.div(realEthAmount, _realTokenPrice);
+        int128 s = RealMath.div(getRealPriceSpeed(), RealMath.toReal(2));
+        int128 tns = RealMath.mul(t0, s);
         int128 exptns = RealMath.exp(tns);
 
         int128 tn0 = t0;
@@ -46,11 +44,11 @@ contract MintaramaPriceTest {
         for (uint i = 0; i < 10; i++) {
 
             int128 tn1 = RealMath.div(
-                RealMath.mul( RealMath.mul(RealMath.ipow(t0, 2), getRealPriceSpeed()), exptns ) + t0,
+                RealMath.mul( RealMath.mul(RealMath.ipow(t0, 2), s), exptns ) + t0,
                 RealMath.mul( exptns, RealMath.toReal(1) + tns )
             );
 
-            if (RealMath.abs(tn0-tn1) < RealMath.div(RealMath.toReal(1), RealMath.toReal(10e6))) return tn1;
+            if (RealMath.abs(tn0-tn1) < RealMath.div(RealMath.toReal(1), RealMath.toReal(10e6))) break;
 
             tn0 = tn1;
         }
@@ -60,7 +58,7 @@ contract MintaramaPriceTest {
     }
 
     function realEthToTokens(int128 realEthAmount) public view returns(int256) {
-        return int256(RealMath.fromReal(RealMath.round(RealMath.mul(realEthToRealTokens(realEthAmount), RealMath.toReal(1e5))))) * 10e13;
+        return convertRealTo256(realEthToRealTokens(realEthAmount));
     }
     
     function getRealPriceSpeed() returns(int128) {
@@ -68,7 +66,21 @@ contract MintaramaPriceTest {
         return RealMath.div(realPercent, RealMath.toReal(_priceSpeedTokenBlock));
     }
 
-     
+    function convertRealToUint256(int128 realVal) public pure returns(uint256){
+        return SafeMath.mul(uint256(RealMath.fromReal(RealMath.round(RealMath.mul(realVal, RealMath.toReal(1e5))))), uint(1e13));
+    }
+
+    function convertRealTo256(int128 realVal) public pure returns(int256){
+        return int256(RealMath.fromReal(RealMath.round(RealMath.mul(realVal, RealMath.toReal(1e5))))) * 1e13;
+    }
+
+    function convertUint256ToReal(uint256 val) public pure returns(int128) {
+        return RealMath.div(RealMath.toReal(int40(SafeMath.div(val, 1e13))), RealMath.toReal(int40(1e5)));
+    }    
+
+    function convertInt256ToReal(int256 val) public pure returns(int128) {
+        return RealMath.div(RealMath.toReal(int40(val / 1e13)), RealMath.toReal(int40(1e5)));
+    }   
 }
 
 library RealMath {
@@ -604,5 +616,83 @@ library RealMath {
         
         return atan_result;
     }    
+}
+
+library SafeMath {
+
+    /**
+    * @dev Multiplies two numbers, throws on overflow.
+    */
+    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0) {
+            return 0;
+        }
+        uint256 c = a * b;
+        assert(c / a == b);
+        return c;
+    }
+
+    function mul(uint128 a, uint128 b) internal pure returns (uint128) {
+        if (a == 0) {
+            return 0;
+        }
+        uint128 c = a * b;
+        assert(c / a == b);
+        return c;
+    }
+
+    /**
+    * @dev Integer division of two numbers, truncating the quotient.
+    */
+    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+        // assert(b > 0); // Solidity automatically throws when dividing by 0
+        uint256 c = a / b;
+        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+        return c;
+    }
+
+    function div(uint128 a, uint128 b) internal pure returns (uint128) {
+        // assert(b > 0); // Solidity automatically throws when dividing by 0
+        uint128 c = a / b;
+        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
+        return c;
+    }
+
+    /**
+    * @dev Substracts two numbers, throws on overflow (i.e. if subtrahend is greater than minuend).
+    */
+    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+        assert(b <= a);
+        return a - b;
+    }
+
+    function sub(uint128 a, uint128 b) internal pure returns (uint128) {
+        assert(b <= a);
+        return a - b;
+    }
+
+    /**
+    * @dev Adds two numbers, throws on overflow.
+    */
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a + b;
+        assert(c >= a);
+        return c;
+    }
+
+    function add(uint128 a, uint128 b) internal pure returns (uint128) {
+        uint128 c = a + b;
+        assert(c >= a);
+        return c;
+    }
+
+    function sqrt(uint x) internal pure returns (uint y) {
+        uint z = (x + 1) / 2;
+        y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+    }        
 }
 
