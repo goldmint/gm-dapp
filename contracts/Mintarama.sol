@@ -14,9 +14,9 @@ contract Mintarama {
     uint8 constant public BIG_PROMO_PERCENT = 5;
     uint8 constant public QUICK_PROMO_PERCENT = 5;
 
-    uint128 constant public BIG_PROMO_BLOCK_INTERVAL = 9999;
-    uint128 constant public QUICK_PROMO_BLOCK_INTERVAL = 100;
-    uint128 constant public PROMO_MIN_PURCHASE = 100;
+    uint128 public BIG_PROMO_BLOCK_INTERVAL = 9999;
+    uint128 public QUICK_PROMO_BLOCK_INTERVAL = 100;
+    uint256 public PROMO_MIN_PURCHASE = 100 ether;
 
     int40 constant public PRICE_SPEED_PERCENT = 5;
     int40 constant public PRICE_SPEED_TOKEN_BLOCK = 10000;
@@ -51,33 +51,22 @@ contract Mintarama {
     uint256 internal _quickPromoBonus;
     
     
-    event onTokenPurchase(
-        address indexed customerAddress,
-        uint256 incomingEthereum,
-        uint256 tokensMinted,
-        address indexed referredBy
-    );
+    event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
     
-    event onTokenSell(
-        address indexed customerAddress,
-        uint256 tokensBurned,
-        uint256 ethereumEarned
-    );
+    event onTokenSell(address indexed userAddress, uint256 tokensBurned, uint256 ethEarned);
     
-    event onReinvestment(
-        address indexed customerAddress,
-        uint256 ethereumReinvested,
-        uint256 tokensMinted
-    );
+    event onReinvestment(address indexed userAddress, uint256 ethReinvested, uint256 tokensMinted);
     
-    event onWithdraw(
-        address indexed customerAddress,
-        uint256 ethereumWithdrawn
-    );    
+    event onWithdraw(address indexed userAddress, uint256 ethWithdrawn); 
+
+    event onWinQuickPromo(address indexed userAddress, uint256 ethWon);    
+   
+    event onWinBigPromo(address indexed userAddress, uint256 ethWon);    
+
 
     // only people with tokens
     modifier onlyContractUsers() {
-        require(getUserTokenBalance(msg.sender) > 0);
+        require(getLocalTokenBalance(msg.sender) > 0);
         _;
     }
     
@@ -115,6 +104,14 @@ contract Mintarama {
         require(_totalSupply == 0 && tokenAmount == totalTokenAmount);
 
         _totalSupply = totalTokenAmount;
+    }
+
+    function setBigPromoInterval(uint128 val) public onlyAdministrator {
+        BIG_PROMO_BLOCK_INTERVAL = val;
+    }
+
+    function setQuickPromoInterval(uint128 val) public onlyAdministrator {
+        QUICK_PROMO_BLOCK_INTERVAL = val;
     }
 
     /**
@@ -225,12 +222,12 @@ contract Mintarama {
         return _totalSupply - getRemainTokenAmount();
     }
 
-    function getUserTokenBalance(address userAddress) public view returns(uint256) {
+    function getLocalTokenBalance(address userAddress) public view returns(uint256) {
         return _userTokenBalances[userAddress];
     }
     
     function getCurrentUserTokenBalance() public view returns(uint256) {
-        return getUserTokenBalance(msg.sender);
+        return getLocalTokenBalance(msg.sender);
     }    
 
     /**
@@ -295,7 +292,7 @@ contract Mintarama {
     }
 
     function getUserMaxPurchase(address userAddress) public view returns(uint256) {
-        return _mntpToken.balanceOf(userAddress) - getUserTokenBalance(userAddress);
+        return _mntpToken.balanceOf(userAddress) - getLocalTokenBalance(userAddress);
     }
     
     function getCurrentUserMaxPurchase() public view returns(uint256) {
@@ -306,8 +303,8 @@ contract Mintarama {
         return _devReward;
     }
 
-    function getBlockNum() public view returns(uint256) {
-        return block.number;
+    function getPromoBonus() public view returns(uint256) {
+        return _promoBonuses[msg.sender];
     }
 
     function getRealPriceSpeed() public view returns(int128) {
@@ -315,6 +312,14 @@ contract Mintarama {
         return RealMath.div(realPercent, RealMath.toReal(PRICE_SPEED_TOKEN_BLOCK));
     }
    
+    function getBlockNum() public view returns(uint256) {
+        return block.number;
+    }
+
+    function getInitBlockNum() public view returns(uint256) {
+        return _initBlockNum;
+    }
+
     // INTERNAL FUNCTIONS
 
     
@@ -322,9 +327,13 @@ contract Mintarama {
 
         uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0;
         (tokenAmount, totalFeeEth, taxedEth) = estimateBuyOrder(ethAmount);
+
+        //user has to have at least equal amount of tokens which he's willing to buy 
+        require(getCurrentUserMaxPurchase() >= tokenAmount);
+
         require(tokenAmount > 0 && (SafeMath.add(tokenAmount, getTotalTokenSold()) > getTotalTokenSold()));
 
-        if (refAddress == msg.sender || getUserTokenBalance(refAddress) < MIN_REF_TOKEN_AMOUNT) refAddress = 0x0;
+        if (refAddress == msg.sender || getLocalTokenBalance(refAddress) < MIN_REF_TOKEN_AMOUNT) refAddress = 0x0;
 
         uint256 userRewardBefore = getUserReward(false);
 
@@ -344,21 +353,32 @@ contract Mintarama {
         return tokenAmount;
     }
 
+
     function checkAndSendPromoBonus(uint256 purchaedTokenAmount) internal {
         if (purchaedTokenAmount < PROMO_MIN_PURCHASE) return;
 
-        if ((block.number - _initBlockNum) % QUICK_PROMO_BLOCK_INTERVAL == 0) sendQuickPromoBonus();
-        if ((block.number - _initBlockNum) % BIG_PROMO_BLOCK_INTERVAL == 0) sendBigPromoBonus();
+        uint256 blockNumSinceInit = block.number - _initBlockNum;
+
+        if (blockNumSinceInit % QUICK_PROMO_BLOCK_INTERVAL == 0) sendQuickPromoBonus();
+        if (blockNumSinceInit % BIG_PROMO_BLOCK_INTERVAL == 0) sendBigPromoBonus();
     }
+
+
 
     function sendQuickPromoBonus() internal {
         _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], _quickPromoBonus);
+        
+        onWinQuickPromo(msg.sender, _quickPromoBonus);
+
         _quickPromoBonus = 0;
     }
 
 
     function sendBigPromoBonus() internal {
         _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], _bigPromoBonus);
+
+        onWinBigPromo(msg.sender, _bigPromoBonus);
+
         _bigPromoBonus = 0;        
     }
 
@@ -479,19 +499,19 @@ contract Mintarama {
     function calcPercent(uint256 amount, uint8 percent) internal pure returns(uint256) {
         return SafeMath.mul(SafeMath.div(amount, 100), percent);
     }
-    
+
     /*
     * Converts real num to uint256. Works only with positive numbers. Occurancy is 5 fractional digits.
     */
 
-    function convertRealTo256(int128 realVal) public pure returns(uint256){
+    function convertRealTo256(int128 realVal) internal pure returns(uint256){
         return SafeMath.mul(uint256(RealMath.fromReal(RealMath.round(RealMath.mul(realVal, RealMath.toReal(1e5))))), uint(1e13));
     }
 
     /*
     * Converts uint256 to real num. Occurancy is 5 fractional digits.
     */
-    function convert256ToReal(uint256 val) public pure returns(int128) {
+    function convert256ToReal(uint256 val) internal pure returns(int128) {
         return RealMath.div(RealMath.toReal(int40(SafeMath.div(val, 1e13))), RealMath.toReal(int40(1e5)));
     }   
 }
