@@ -471,6 +471,8 @@ describe('MINTARAMA', function() {
         var buyer1EthBalance1 = web3.eth.getBalance(buyer1);
         var mraContractEthBalance1 = web3.eth.getBalance(mraContractAddress);
         var buyer1Reward1 = await mraContract.getUserReward(true, { from: buyer1 });
+        var buyer1BonusReward1 = await mraContract.getPromoBonus({ from: buyer1 });
+        
         console.log("buyer1Reward1: " + buyer1Reward1.toString(10));
         assert(buyer1Reward1 > 0);
         await mraContract.withdraw({ from: buyer1 });
@@ -479,7 +481,7 @@ describe('MINTARAMA', function() {
         var buyer1Reward2 = await mraContract.getUserReward(true, { from: buyer1 });
         console.log("buyer1Reward2: " + buyer1Reward2.toString(10));
         
-        assert(Math.abs(buyer1EthBalance2.sub(buyer1EthBalance1).sub(buyer1Reward1)) < 100000);
+        assert(Math.abs(buyer1EthBalance2.sub(buyer1EthBalance1).sub(buyer1Reward1).sub(buyer1BonusReward1)) < 100000);
 
         assert.equal(buyer1Reward2.toString(10), "0");
     });
@@ -578,7 +580,6 @@ describe('MINTARAMA', function() {
 
         //sell all tokens back
         {
-
 
             var buyer1Reward1 = await mraContract.getUserReward(true, { from: buyer1 });
             var buyer2Reward1 = await mraContract.getUserReward(true, { from: buyer2 });

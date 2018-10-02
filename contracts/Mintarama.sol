@@ -160,9 +160,13 @@ contract Mintarama {
         // update dividend tracker
         _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], reward * MAGNITUDE);
         
-        // add ref. bonus
+        // add ref bonus
         reward = SafeMath.add(reward, _referralBalances[msg.sender]);
         _referralBalances[msg.sender] = 0;
+
+        // add promo bonus
+        reward = SafeMath.add(reward, _promoBonuses[msg.sender]);
+        _promoBonuses[msg.sender] = 0;
         
         msg.sender.transfer(reward);
         
@@ -230,12 +234,7 @@ contract Mintarama {
         return getLocalTokenBalance(msg.sender);
     }    
 
-    /**
-     * Retrieve the reward owned by the caller.
-     * If `includeRefBonus` is to to 1/true, the referral bonus will be included in the calculations.
-     * The reason for this, is that in the frontend, we will want to get the total divs (global + ref)
-     * But in the internal calculations, we want them separate. 
-     */ 
+
     function getUserReward(bool includeRefBonus) public view returns(uint256) {
         uint256 reward = _bonusPerMntp * _userTokenBalances[msg.sender];
         reward = ((reward < _rewardPayouts[msg.sender]) ? 0 : SafeMath.sub(reward, _rewardPayouts[msg.sender])) / MAGNITUDE;
@@ -243,7 +242,8 @@ contract Mintarama {
         if (includeRefBonus) reward = SafeMath.add(reward, _referralBalances[msg.sender]);
         
         return reward;
-    }    
+    }
+  
 
     function get1TokenSellPrice() public view returns(uint256) {
         // our calculation relies on the token supply, so we need supply. Doh.
