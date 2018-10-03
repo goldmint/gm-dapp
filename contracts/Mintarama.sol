@@ -18,8 +18,8 @@ contract Mintarama {
     uint128 public QUICK_PROMO_BLOCK_INTERVAL = 100;
     uint256 public PROMO_MIN_PURCHASE = 100 ether;
 
-    int40 constant public PRICE_SPEED_PERCENT = 5;
-    int40 constant public PRICE_SPEED_TOKEN_BLOCK = 10000;
+    int40 public PRICE_SPEED_PERCENT = 5;
+    int40 public PRICE_SPEED_TOKEN_BLOCK = 10000;
 
 
     uint256 constant public TOKEN_PRICE_INITIAL = 0.01 ether;
@@ -34,7 +34,7 @@ contract Mintarama {
 
 
     mapping(address => uint256) internal _userTokenBalances;
-    mapping(address => uint256) internal _referralBalances;
+    mapping(address => uint256) internal _refBalances;
     mapping(address => uint256) internal _rewardPayouts;
     mapping(address => uint256) internal _promoBonuses;
     mapping(address => uint256) internal _ambassadorAccumulatedQuota;    
@@ -72,7 +72,7 @@ contract Mintarama {
     
     // only people with profits
     modifier onlyRewardOwners() {
-        require(getUserReward(true) > 0);
+        require(getUserReward(true, true) > 0);
         _;
     }
     
@@ -114,6 +114,11 @@ contract Mintarama {
         QUICK_PROMO_BLOCK_INTERVAL = val;
     }
 
+    function setPriceSpeed(uint40 speedPercent, uint40 speedTokenBlock) public onlyAdministrator {
+        PRICE_SPEED_PERCENT = int40(speedPercent);
+        PRICE_SPEED_TOKEN_BLOCK = int40(speedTokenBlock);
+    }
+
     /**
      * Converts incoming eth to tokens
      */
@@ -132,41 +137,20 @@ contract Mintarama {
      * Converts all of caller's reward to tokens.
      */
     function reinvest() onlyRewardOwners() public {
-        // fetch reward
-        uint256 reward = getUserReward(false); // retrieve ref. bonus later in the code
         
-        // pay out the reward virtually
-        _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], reward * MAGNITUDE);
-        
-        // retrieve ref. bonus
-        reward += _referralBalances[msg.sender];
-        _referralBalances[msg.sender] = 0;
-        
-        // dispatch a buy order with the virtualized "withdrawn reward"
+        uint256 reward = getRewardAndPrepareWithdraw();
+
         uint256 tokens = purchaseTokens(reward, 0x0);
         
-        // fire event
         onReinvestment(msg.sender, reward, tokens);
     }
 
      /**
      * Withdraws all of the callers earnings.
      */
-    function withdraw() /*onlyRewardOwners()*/ public {
-        if (getUserReward(true) == 0) return;
+    function withdraw() onlyRewardOwners() public {
 
-        uint256 reward = getUserReward(false);
-        
-        // update dividend tracker
-        _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], reward * MAGNITUDE);
-        
-        // add ref bonus
-        reward = SafeMath.add(reward, _referralBalances[msg.sender]);
-        _referralBalances[msg.sender] = 0;
-
-        // add promo bonus
-        reward = SafeMath.add(reward, _promoBonuses[msg.sender]);
-        _promoBonuses[msg.sender] = 0;
+        uint256 reward = getRewardAndPrepareWithdraw();
         
         msg.sender.transfer(reward);
         
@@ -235,11 +219,12 @@ contract Mintarama {
     }    
 
 
-    function getUserReward(bool includeRefBonus) public view returns(uint256) {
+    function getUserReward(bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
         uint256 reward = _bonusPerMntp * _userTokenBalances[msg.sender];
         reward = ((reward < _rewardPayouts[msg.sender]) ? 0 : SafeMath.sub(reward, _rewardPayouts[msg.sender])) / MAGNITUDE;
         
-        if (includeRefBonus) reward = SafeMath.add(reward, _referralBalances[msg.sender]);
+        if (incRefBonus) reward = SafeMath.add(reward, _refBalances[msg.sender]);
+        if (incPromoBonus) reward = SafeMath.add(reward, _promoBonuses[msg.sender]);
         
         return reward;
     }
@@ -250,7 +235,7 @@ contract Mintarama {
         if(getTotalTokenSold() == 0){
             return TOKEN_PRICE_INITIAL - TOKEN_PRICE_INC;
         } else {
-            uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0; 
+            uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0;
             (taxedEth, ethAmount, totalFeeEth) = estimateSellOrder(1e18);
 
             return taxedEth;
@@ -262,7 +247,7 @@ contract Mintarama {
         if(getTotalTokenSold() == 0){
             return TOKEN_PRICE_INITIAL + TOKEN_PRICE_INC;
         } else {
-            uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0;
+            uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0; 
             (tokenAmount, totalFeeEth, taxedEth) = estimateBuyOrder(1e18);  
 
             return taxedEth;
@@ -307,6 +292,10 @@ contract Mintarama {
         return _promoBonuses[msg.sender];
     }
 
+    function getRefBonus() public view returns(uint256) {
+        return _refBalances[msg.sender];
+    }
+
     function getRealPriceSpeed() public view returns(int128) {
         int128 realPercent = RealMath.div(RealMath.toReal(PRICE_SPEED_PERCENT), RealMath.toReal(100));
         return RealMath.div(realPercent, RealMath.toReal(PRICE_SPEED_TOKEN_BLOCK));
@@ -335,14 +324,14 @@ contract Mintarama {
 
         if (refAddress == msg.sender || getLocalTokenBalance(refAddress) < MIN_REF_TOKEN_AMOUNT) refAddress = 0x0;
 
-        uint256 userRewardBefore = getUserReward(false);
+        uint256 userRewardBefore = getUserReward(false, false);
 
         distributeFee(totalFeeEth, refAddress);
         
         addUserTokens(msg.sender, tokenAmount);
 
         // the user is not going to receive any reward for the current purchase
-        _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], SafeMath.sub(getUserReward(false), userRewardBefore) * MAGNITUDE);
+        _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], SafeMath.sub(getUserReward(false, false), userRewardBefore) * MAGNITUDE);
         
         checkAndSendPromoBonus(tokenAmount);
         
@@ -353,6 +342,23 @@ contract Mintarama {
         return tokenAmount;
     }
 
+    function getRewardAndPrepareWithdraw() internal returns(uint256) {
+
+        uint256 reward = getUserReward(false, false);
+        
+        // update dividend tracker
+        _rewardPayouts[msg.sender] = SafeMath.add(_rewardPayouts[msg.sender], reward * MAGNITUDE);
+        
+        // add ref bonus
+        reward = SafeMath.add(reward, _refBalances[msg.sender]);
+        _refBalances[msg.sender] = 0;
+
+        // add promo bonus
+        reward = SafeMath.add(reward, _promoBonuses[msg.sender]);
+        _promoBonuses[msg.sender] = 0;
+
+        return reward;
+    }
 
     function checkAndSendPromoBonus(uint256 purchaedTokenAmount) internal {
         if (purchaedTokenAmount < PROMO_MIN_PURCHASE) return;
@@ -363,8 +369,6 @@ contract Mintarama {
         if (blockNumSinceInit % BIG_PROMO_BLOCK_INTERVAL == 0) sendBigPromoBonus();
     }
 
-
-
     function sendQuickPromoBonus() internal {
         _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], _quickPromoBonus);
         
@@ -372,7 +376,6 @@ contract Mintarama {
 
         _quickPromoBonus = 0;
     }
-
 
     function sendBigPromoBonus() internal {
         _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], _bigPromoBonus);
@@ -399,7 +402,7 @@ contract Mintarama {
         uint256 totalShareReward = calcTotalShareRewardFee(totalFeeEth);
 
         if (refAddress != 0x0) {
-            _referralBalances[refAddress] = SafeMath.add(_referralBalances[refAddress], refBonus);
+            _refBalances[refAddress] = SafeMath.add(_refBalances[refAddress], refBonus);
         } else {
             totalShareReward = SafeMath.add(totalShareReward, refBonus);
         }

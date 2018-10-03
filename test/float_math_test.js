@@ -54,6 +54,15 @@ describe('FLOAT_MATH', function() {
 
     });
 
+    it('test eth-tokens converter', async() => {
+
+        var eth = await mptContract.realTokensToRealEth(realMath.toReal(100));
+
+        var tok = realMath.fromReal(await mptContract.realEthToRealTokens(eth));
+
+        console.log("tok: " +  tok);
+
+    });
     it('test convert', async() => {
         
         var val = 0.22243 * 1e18;

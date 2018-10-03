@@ -28,6 +28,7 @@ contract MintaramaPriceTest {
         return RealMath.mul(realTokenAmount, calc1RealTokenRateFromRealTokens(realTokenAmount));
     }
 
+
     function realTokensToEth(int128 realTokenAmount) public view returns(int256) {
         return convertRealTo256(RealMath.mul(realTokenAmount, calc1RealTokenRateFromRealTokens(realTokenAmount)));
     }
