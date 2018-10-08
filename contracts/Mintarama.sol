@@ -44,11 +44,11 @@ contract Mintarama {
     uint256 internal _totalSupply;
     int128 internal _realTokenPrice;
 
-    uint256 internal _initBlockNum;
-    uint256 internal _bonusPerMntp;
-    uint256 internal _devReward;
-    uint256 internal _bigPromoBonus;
-    uint256 internal _quickPromoBonus;
+    uint256 public initBlockNum;
+    uint256 public bonusPerMntp;
+    uint256 public devReward;
+    uint256 public bigPromoBonus;
+    uint256 public quickPromoBonus;
     
     
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
@@ -58,6 +58,8 @@ contract Mintarama {
     event onReinvestment(address indexed userAddress, uint256 ethReinvested, uint256 tokensMinted);
     
     event onWithdraw(address indexed userAddress, uint256 ethWithdrawn); 
+
+    event onWithdrawDevReward(address indexed toAddress, uint256 ethWithdrawn); 
 
     event onWinQuickPromo(address indexed userAddress, uint256 ethWon);    
    
@@ -94,7 +96,7 @@ contract Mintarama {
     function Mintarama(address mntpTokenAddress) public {
         _mntpToken = IMNTP(mntpTokenAddress);
         _administrators[keccak256(msg.sender)] = true;
-        _initBlockNum = block.number;
+        initBlockNum = block.number;
         _realTokenPrice = convert256ToReal(TOKEN_PRICE_INITIAL);
     }
     
@@ -127,6 +129,33 @@ contract Mintarama {
     }
 
     /**
+     * sell tokens for eth
+     */
+    function sell(uint256 tokenAmount) onlyContractUsers() public returns(uint256) {
+        
+        if (tokenAmount > getUserLocalTokenBalance() || tokenAmount == 0) return;
+
+
+        uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0;
+
+        (taxedEth, ethAmount, totalFeeEth) = estimateSellOrder(tokenAmount);
+
+        subUserTokens(msg.sender, tokenAmount);
+
+        // add reward to the user for the transaction
+        //_rewardPayouts[msg.sender] -= (int256) (tokenAmount * bonusPerMntp);
+        distributeFee(totalFeeEth, 0x0);
+
+        msg.sender.transfer(taxedEth);
+        
+        updateTokenPrice(-convert256ToReal(tokenAmount));
+        
+        onTokenSell(msg.sender, tokenAmount, taxedEth);
+
+        return taxedEth;
+    }   
+
+    /**
      * Fallback function to handle ethereum that was send straight to the contract
      */
     function() public payable {
@@ -156,33 +185,17 @@ contract Mintarama {
         
         onWithdraw(msg.sender, reward);
     }
+
+    function withdrawDevReward(address to) public onlyAdministrator {
+        require(devReward > 0);
+
+        to.transfer(devReward);
+
+        devReward = 0;
+
+        onWithdrawDevReward(to, devReward);
+    }
     
-    /**
-     * sell tokens for eth
-     */
-    function sell(uint256 tokenAmount) onlyContractUsers() public returns(uint256) {
-        
-        if (tokenAmount > getCurrentUserTokenBalance() || tokenAmount == 0) return;
-
-
-        uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0;
-
-        (taxedEth, ethAmount, totalFeeEth) = estimateSellOrder(tokenAmount);
-
-        subUserTokens(msg.sender, tokenAmount);
-
-        // add reward to the user for the transaction
-        //_rewardPayouts[msg.sender] -= (int256) (tokenAmount * _bonusPerMntp);
-        distributeFee(totalFeeEth, 0x0);
-
-        msg.sender.transfer(taxedEth);
-        
-        updateTokenPrice(-convert256ToReal(tokenAmount));
-        
-        onTokenSell(msg.sender, tokenAmount, taxedEth);
-
-        return taxedEth;
-    }   
 
     /* HELPERS */  
 
@@ -214,13 +227,13 @@ contract Mintarama {
         return _userTokenBalances[userAddress];
     }
     
-    function getCurrentUserTokenBalance() public view returns(uint256) {
+    function getUserLocalTokenBalance() public view returns(uint256) {
         return getLocalTokenBalance(msg.sender);
     }    
 
 
     function getUserReward(bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
-        uint256 reward = _bonusPerMntp * _userTokenBalances[msg.sender];
+        uint256 reward = bonusPerMntp * _userTokenBalances[msg.sender];
         reward = ((reward < _rewardPayouts[msg.sender]) ? 0 : SafeMath.sub(reward, _rewardPayouts[msg.sender])) / MAGNITUDE;
         
         if (incRefBonus) reward = SafeMath.add(reward, _refBalances[msg.sender]);
@@ -255,7 +268,7 @@ contract Mintarama {
     }
 
     function calculateReward(uint256 tokenAmount) public view returns(uint256) {
-        return (uint256) ((int256)(_bonusPerMntp * tokenAmount)) / MAGNITUDE;
+        return (uint256) ((int256)(bonusPerMntp * tokenAmount)) / MAGNITUDE;
     }  
 
 
@@ -285,7 +298,7 @@ contract Mintarama {
     }
 
     function getDevReward() public view returns(uint256) {
-        return _devReward;
+        return devReward;
     }
 
     function getPromoBonus() public view returns(uint256) {
@@ -301,12 +314,8 @@ contract Mintarama {
         return RealMath.div(realPercent, RealMath.toReal(PRICE_SPEED_TOKEN_BLOCK));
     }
    
-    function getBlockNum() public view returns(uint256) {
-        return block.number;
-    }
-
-    function getInitBlockNum() public view returns(uint256) {
-        return _initBlockNum;
+    function getBlockNumSinceInit() public view returns(uint256) {
+        return block.number - initBlockNum;
     }
 
     // INTERNAL FUNCTIONS
@@ -363,30 +372,29 @@ contract Mintarama {
     function checkAndSendPromoBonus(uint256 purchaedTokenAmount) internal {
         if (purchaedTokenAmount < PROMO_MIN_PURCHASE) return;
 
-        uint256 blockNumSinceInit = block.number - _initBlockNum;
+        uint256 blockNumSinceInit = getBlockNumSinceInit();
 
         if (blockNumSinceInit % QUICK_PROMO_BLOCK_INTERVAL == 0) sendQuickPromoBonus();
         if (blockNumSinceInit % BIG_PROMO_BLOCK_INTERVAL == 0) sendBigPromoBonus();
     }
 
     function sendQuickPromoBonus() internal {
-        _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], _quickPromoBonus);
+        _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], quickPromoBonus);
         
-        onWinQuickPromo(msg.sender, _quickPromoBonus);
+        onWinQuickPromo(msg.sender, quickPromoBonus);
 
-        _quickPromoBonus = 0;
+        quickPromoBonus = 0;
     }
 
     function sendBigPromoBonus() internal {
-        _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], _bigPromoBonus);
+        _promoBonuses[msg.sender] = SafeMath.add(_promoBonuses[msg.sender], bigPromoBonus);
 
-        onWinBigPromo(msg.sender, _bigPromoBonus);
+        onWinBigPromo(msg.sender, bigPromoBonus);
 
-        _bigPromoBonus = 0;        
+        bigPromoBonus = 0;        
     }
 
     function distributeFee(uint256 totalFeeEth, address refAddress) internal {
-
         addProfitPerShare(totalFeeEth, refAddress);
         addDevReward(totalFeeEth);
         addBigPromoBonus(totalFeeEth);
@@ -394,11 +402,10 @@ contract Mintarama {
     }
 
     function addProfitPerShare(uint256 totalFeeEth, address refAddress) internal {
-        
         if (getTotalTokenSold() == 0) return;
 
-        uint256 refBonus = calcRefBonus(totalFeeEth);
 
+        uint256 refBonus = calcRefBonus(totalFeeEth);
         uint256 totalShareReward = calcTotalShareRewardFee(totalFeeEth);
 
         if (refAddress != 0x0) {
@@ -407,33 +414,33 @@ contract Mintarama {
             totalShareReward = SafeMath.add(totalShareReward, refBonus);
         }
 
-        _bonusPerMntp = SafeMath.add(_bonusPerMntp, (totalShareReward * MAGNITUDE) / getTotalTokenSold());
+        //if (getTotalTokenSold() == 0) {
+        //    devReward = SafeMath.add(devReward, totalShareReward);
+        //} else {
+            bonusPerMntp = SafeMath.add(bonusPerMntp, (totalShareReward * MAGNITUDE) / getTotalTokenSold());
+        //}
     }
 
     function addDevReward(uint256 totalFeeEth) internal {
-        _devReward = SafeMath.add(_devReward, calcDevReward(totalFeeEth));
+        devReward = SafeMath.add(devReward, calcDevReward(totalFeeEth));
     }    
 
     function addBigPromoBonus(uint256 totalFeeEth) internal {
-        _bigPromoBonus = SafeMath.add(_bigPromoBonus, calcBigPromoBonus(totalFeeEth));
+        bigPromoBonus = SafeMath.add(bigPromoBonus, calcBigPromoBonus(totalFeeEth));
     }
 
     function addQuickPromoBonus(uint256 totalFeeEth) internal {
-        _quickPromoBonus = SafeMath.add(_quickPromoBonus, calcQuickPromoBonus(totalFeeEth));
+        quickPromoBonus = SafeMath.add(quickPromoBonus, calcQuickPromoBonus(totalFeeEth));
     }    
 
-    function addUserTokens(address user, uint256 tokenAmount) internal returns(bool) {
+    function addUserTokens(address user, uint256 tokenAmount) internal {
         _userTokenBalances[user] = SafeMath.add(_userTokenBalances[user], tokenAmount);  
-        _mntpToken.transfer(msg.sender, tokenAmount);
-
-        return true;     
+        _mntpToken.transfer(msg.sender, tokenAmount);   
     }
 
-    function subUserTokens(address user, uint256 tokenAmount) internal returns(bool) {
+    function subUserTokens(address user, uint256 tokenAmount) internal {
         _userTokenBalances[user] = SafeMath.sub(_userTokenBalances[user], tokenAmount);  
-        _mntpToken.transferFrom(user, address(this), tokenAmount);
-
-        return true;     
+        _mntpToken.transferFrom(user, address(this), tokenAmount);    
     }
 
     function updateTokenPrice(int128 realTokenAmount) internal {
