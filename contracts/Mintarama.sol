@@ -25,7 +25,6 @@ contract Mintarama {
 
     uint256 constant public TOKEN_PRICE_INITIAL = 0.01 ether;
     uint256 constant public TOKEN_PRICE_INC = 0.00000001 ether;
-    uint256 constant public MIN_REF_TOKEN_AMOUNT = 1 ether;
 
     
     // ambassador program
@@ -45,12 +44,18 @@ contract Mintarama {
     uint256 internal _totalSupply;
     int128 internal _realTokenPrice;
 
+    uint256 public minRefTokenAmount = 1 ether;
     uint256 public initBlockNum;
     uint256 public bonusPerMntp;
     uint256 public devReward;
     uint256 public bigPromoBonus;
     uint256 public quickPromoBonus;
     
+
+    uint64 public initTime;
+    uint64 public expirationPeriodDays;
+    
+    bool public isActive;
     
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
     
@@ -78,10 +83,9 @@ contract Mintarama {
         require(getUserReward(true, true) > 0);
         _;
     }
-    
+
     // administrators can:
-    // -> change the name of the contractч
-    // -> change the name of the token
+    // -> change the name of the contract
     // -> change the PoS difficulty (How many tokens it costs to hold a masternode, in case it gets crazy high later)
     // they CANNOT:
     // -> take funds
@@ -93,46 +97,74 @@ contract Mintarama {
         _;
     }
 
+    modifier onlyActive() {
+        require(isActive);
+        _;
+    }
 
-    function Mintarama(address mntpTokenAddress) public {
+
+    function Mintarama(address mntpTokenAddress, uint64 expirationInDays) public {
         _mntpToken = IMNTP(mntpTokenAddress);
         _administrators[keccak256(msg.sender)] = true;
-        initBlockNum = block.number;
         _realTokenPrice = convert256ToReal(TOKEN_PRICE_INITIAL);
+
+        initBlockNum = block.number;
+        initTime = uint64(now);
+
+        expirationPeriodDays = initTime + expirationInDays * 1 days;
+
+        isActive = true;
     }
     
-    function setTotalSupply(uint256 totalTokenAmount) public onlyAdministrator {
+    function setTotalSupply(uint256 val) onlyAdministrator public {
         uint256 tokenAmount = _mntpToken.balanceOf(address(this));
         
-        require(_totalSupply == 0 && tokenAmount == totalTokenAmount);
+        require(_totalSupply == 0 && tokenAmount == val);
 
-        _totalSupply = totalTokenAmount;
+        _totalSupply = val;
     }
 
-    function setBigPromoInterval(uint128 val) public onlyAdministrator {
+    function setBigPromoInterval(uint128 val) onlyAdministrator public {
         BIG_PROMO_BLOCK_INTERVAL = val;
     }
 
-    function setQuickPromoInterval(uint128 val) public onlyAdministrator {
+    function setQuickPromoInterval(uint128 val) onlyAdministrator public {
         QUICK_PROMO_BLOCK_INTERVAL = val;
     }
 
-    function setPriceSpeed(uint40 speedPercent, uint40 speedTokenBlock) public onlyAdministrator {
+    function setPriceSpeed(uint40 speedPercent, uint40 speedTokenBlock) onlyAdministrator public {
         PRICE_SPEED_PERCENT = int40(speedPercent);
         PRICE_SPEED_TOKEN_BLOCK = int40(speedTokenBlock);
+    }
+
+    function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
+        minRefTokenAmount = val;
+    }
+
+    function switchActive() onlyAdministrator public {
+        isActive = !isActive;
+    }
+
+    function finish() onlyAdministrator public {
+        require(uint(now) >= expirationPeriodDays);
+        
+        _mntpToken.transfer(msg.sender, getRemainTokenAmount());   
+        msg.sender.transfer(getTotalEthBalance());
+
+        isActive = false;
     }
 
     /**
      * Converts incoming eth to tokens
      */
-    function buy(address refAddress) public payable returns(uint256){
+    function buy(address refAddress) onlyActive public payable returns(uint256){
         return purchaseTokens(msg.value, refAddress);
     }
 
     /**
      * sell tokens for eth
      */
-    function sell(uint256 tokenAmount) onlyContractUsers() public returns(uint256) {
+    function sell(uint256 tokenAmount) onlyActive onlyContractUsers public returns(uint256) {
         
         if (tokenAmount > getUserLocalTokenBalance() || tokenAmount == 0) return;
 
@@ -143,8 +175,6 @@ contract Mintarama {
 
         subUserTokens(msg.sender, tokenAmount);
 
-        // add reward to the user for the transaction
-        //_rewardPayouts[msg.sender] -= (int256) (tokenAmount * bonusPerMntp);
         distributeFee(totalFeeEth, 0x0);
 
         msg.sender.transfer(taxedEth);
@@ -159,14 +189,14 @@ contract Mintarama {
     /**
      * Fallback function to handle ethereum that was send straight to the contract
      */
-    function() public payable {
+    function() onlyActive public payable {
         purchaseTokens(msg.value, 0x0);
     }
 
     /**
      * Converts all of caller's reward to tokens.
      */
-    function reinvest() onlyRewardOwners() public {
+    function reinvest() onlyActive onlyRewardOwners public {
         
         uint256 reward = getRewardAndPrepareWithdraw();
 
@@ -178,7 +208,7 @@ contract Mintarama {
      /**
      * Withdraws all of the callers earnings.
      */
-    function withdraw() onlyRewardOwners() public {
+    function withdraw() onlyActive onlyRewardOwners public {
 
         uint256 reward = getRewardAndPrepareWithdraw();
         
@@ -187,7 +217,7 @@ contract Mintarama {
         onWithdraw(msg.sender, reward);
     }
 
-    function withdrawDevReward(address to) public onlyAdministrator {
+    function withdrawDevReward(address to) onlyAdministrator public {
         require(devReward > 0);
 
         to.transfer(devReward);
@@ -233,7 +263,7 @@ contract Mintarama {
     }    
 
     function isRefAvailable(address refAddress) public view returns(bool) {
-        return getLocalTokenBalance(refAddress) >= MIN_REF_TOKEN_AMOUNT;
+        return getLocalTokenBalance(refAddress) >= minRefTokenAmount;
     }
 
     function isUserRefAvailable() public view returns(bool) {
@@ -526,7 +556,6 @@ contract Mintarama {
     /*
     * Converts real num to uint256. Works only with positive numbers. Occurancy is 5 fractional digits.
     */
-
     function convertRealTo256(int128 realVal) internal pure returns(uint256){
         return SafeMath.mul(uint256(RealMath.fromReal(RealMath.round(RealMath.mul(realVal, RealMath.toReal(1e5))))), uint(1e13));
     }
