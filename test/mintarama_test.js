@@ -51,9 +51,12 @@ function addAccountInitBalance(pk, balance) {
     });
 }
 
+function bignumToFloat(bignum) {
+    return parseFloat(bignum.div(1e18).toString(10));
+}
 
 function updateTokenBalance(tokenAmount) {
-    totalTokenBalance += parseFloat(tokenAmount.div(1e18).toString(10));
+    totalTokenBalance += bignumToFloat(tokenAmount);
 }
 
 function getExpectedTokenPrice() {
@@ -67,6 +70,10 @@ async function getCurrentTokenPrice() {
 async function updateBlockNum()
 {
     blockNum = await mraContract.getBlockNumSinceInit({from: buyer1});
+}
+
+function getEtalonPrice(tokenAmount) {
+    return startTokenPrice * Math.exp(bignumToFloat(tokenAmount) * priceSpeed / 2);
 }
 
 eval(fs.readFileSync('./test/helpers/misc.js')+'');
@@ -148,11 +155,11 @@ describe('MINTARAMA', function() {
     });
 
     it('init vars', async() => {
-        shareFeePercent = await mraContract.MNTP_REWARD_PERCENT();    
-        refFeePercent = await mraContract.REF_BONUS_PERCENT();
+        shareFeePercent = await mraContract.MNTP_REWARD_PERCENT().div(1e18);    
+        refFeePercent = await mraContract.REF_BONUS_PERCENT().div(1e18);
         initTotalTokenSupply = await mraContract.getTotalTokenSupply(); 
         priceSpeed = realMath.fromReal(await mraContract.getRealPriceSpeed());  
-        devRewardPercent = await mraContract.DEV_REWARD_PERCENT();
+        devRewardPercent = await mraContract.DEV_REWARD_PERCENT().div(1e18);
         startTokenPrice = (await mraContract.TOKEN_PRICE_INITIAL()).div(1e18);
         
         await mraContract.setBigPromoInterval(7, { from: creator });
@@ -161,9 +168,8 @@ describe('MINTARAMA', function() {
         bigPromoInterval = await mraContract.BIG_PROMO_BLOCK_INTERVAL();
         quickPromoInterval = await mraContract.QUICK_PROMO_BLOCK_INTERVAL();
         promoMinPurchase = await mraContract.PROMO_MIN_PURCHASE();
-        minRefTokenAmount = await mraContract.MIN_REF_TOKEN_AMOUNT();
+        minRefTokenAmount = await mraContract.minRefTokenAmount();
     });
-
 
     it('should make a purchase behalf buyer1', async() => {
         {
@@ -174,12 +180,13 @@ describe('MINTARAMA', function() {
 
             var ethContractBalance1 = web3.eth.getBalance(mraContractAddress);
 
-            var userReward1 = await mraContract.getUserReward(true, false);
+            var userReward1 = await mraContract.getCurrentUserReward(true, false);
 
 
             var est = await mraContract.estimateBuyOrder(ethAmount);
             var estimateTokenAmount = est[0]; 
             var totalPurchaseFee = est[1];
+
 
             updateTokenBalance(estimateTokenAmount);
             var expectedTokenPrice = getExpectedTokenPrice();
@@ -187,8 +194,8 @@ describe('MINTARAMA', function() {
 
             //console.log("expectedTokenPrice: " + expectedTokenPrice);
 
-            //var estimatedDevReward = Math.floor((devRewardPercent.add(shareFeePercent).add(refFeePercent)) * totalPurchaseFee / 100);
-            var estimatedDevReward = Math.floor((devRewardPercent) * totalPurchaseFee / 100);
+            var estimatedDevReward = Math.floor((devRewardPercent.add(shareFeePercent).add(refFeePercent)) * totalPurchaseFee / 100);
+            //var estimatedDevReward = Math.floor((devRewardPercent) * totalPurchaseFee / 100);
             var devReward1 = await mraContract.getDevReward();
 
             var totalTokenSold1 = await mraContract.getTotalTokenSold({ from:creator });
@@ -197,7 +204,6 @@ describe('MINTARAMA', function() {
         
         await mraContract.buy(0x0, { from: buyer1, gas: 2900000, value: ethAmount });
         {
-            
             var mraContractUserBalance2 = mraContract.getUserLocalTokenBalance({ from: buyer1 });
             assert.equal((mraContractUserBalance2.sub(mraContractUserBalance1)).toString(10), estimateTokenAmount.toString(10));
 
@@ -210,7 +216,7 @@ describe('MINTARAMA', function() {
             var ethContractBalance2 = web3.eth.getBalance(mraContractAddress);
             assert.equal((ethContractBalance2.sub(ethContractBalance1)).toString(10), ethAmount.toString(10));
 
-            var userReward2 = await mraContract.getUserReward(true, false, { from: buyer1 });
+            var userReward2 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
             assert.equal(userReward2.sub(userReward1).toString(10), "0");
          
             var currentTokenPrice2 = await getCurrentTokenPrice();
@@ -226,8 +232,10 @@ describe('MINTARAMA', function() {
             
         }
 
+        await mraContract.buy(0x0, { from: buyer2, gas: 2900000, value: ethAmount });
+        await mraContract.buy(buyer1, { from: buyer2, gas: 2900000, value: 6 * ether });
     });
-/*
+
     it('should test economy model', async() => {
 
         //sell all tokens back
@@ -246,16 +254,31 @@ describe('MINTARAMA', function() {
 
             // sell all tokens back
             {
-                var buyerTokenBalance1 = await mraContract.getUserLocalTokenBalance({ from: buyer1 });
-                if (buyerTokenBalance1.toString(10) == "0") return;
+                var buyer1Reward1 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
 
-                await mntContract.approve(mraContractAddress, buyerTokenBalance1, { from: buyer1, gas: 2900000});
-                await mraContract.sell(buyerTokenBalance1, { from: buyer1, gas: 2900000});
+                var buyer1TokenBalance1 = await mraContract.getUserLocalTokenBalance({ from: buyer1 });
+                if (buyer1TokenBalance1.toString(10) != "0") {
+                    await mntContract.approve(mraContractAddress, buyer1TokenBalance1, { from: buyer1, gas: 2900000});
+                    await mraContract.sell(buyer1TokenBalance1, { from: buyer1, gas: 2900000});
+                }
+                
+                var buyer2Reward1 = await mraContract.getCurrentUserReward(true, false, { from: buyer2 });
 
-                var buyerTokenBalance2 = await mraContract.getUserLocalTokenBalance({ from: buyer1 });
-                //console.log("2 - buyer1" + ": " + buyerTokenBalance2.toString(10)); 
+                var buyer2TokenBalance1 = await mraContract.getUserLocalTokenBalance({ from: buyer2 });
+                if (buyer2TokenBalance1.toString(10) != "0") {
+                    await mntContract.approve(mraContractAddress, buyer2TokenBalance1, { from: buyer2, gas: 2900000});
+                    await mraContract.sell(buyer2TokenBalance1, { from: buyer2, gas: 2900000});
+                }
 
-                assert(buyerTokenBalance2.toString(10), "0");
+
+                var buyer1TokenBalance2 = await mraContract.getUserLocalTokenBalance({ from: buyer1 });
+                var buyer2TokenBalance2 = await mraContract.getUserLocalTokenBalance({ from: buyer2 });
+
+                //console.log("2 - buyer1" + ": " + buyer1TokenBalance2.toString(10)); 
+
+                assert(buyer1TokenBalance2.toString(10), "0");
+                assert(buyer2TokenBalance2.toString(10), "0");
+
 
                 var tokensSold2 = await mraContract.getTotalTokenSold({ from: creator });
                 assert.equal(tokensSold2.toString(10), "0");
@@ -263,60 +286,32 @@ describe('MINTARAMA', function() {
                 var tokenPrice2 = await getCurrentTokenPrice();
                 assert.equal(tokenPrice2.toString(10), startTokenPrice.toString(10));
 
-                console.log("bonusPerMntp: " + (await mraContract.bonusPerMntp()));
-
-                assert.equal((await mraContract.bonusPerMntp()).toString(10), "0");
             }
-                
+            
+            
+            console.log("buyer1Reward1: " + buyer1Reward1.div(1e18).toString(10));
+            console.log("buyer2Reward1: " + buyer2Reward1.div(1e18).toString(10));
 
-            //accounts.forEach(async(a) => { 
-                //var buyerTokenBalance = await mraContract.getUserLocalTokenBalance({ from: a.pubKey });
-                //console.log(a.name + ": " + buyerTokenBalance.toString(10)); 
-            //});
+            var totalBuyerReward = buyer1Reward1.add(buyer2Reward1);
 
             var mraContractEthBalance = web3.eth.getBalance(mraContractAddress);
             console.log("2 (after selling all tokens back): " + mraContractEthBalance.div(1e18).toString(10));
 
-            //console.log("quickPromoBonus: " + (await mraContract.quickPromoBonus()).div(1e18).toString(10));
-            //console.log("bigPromoBonus: " + (await mraContract.bigPromoBonus()).div(1e18).toString(10));
             var devReward = await mraContract.devReward();
-            var totalPromoReward = (await mraContract.quickPromoBonus()).add(await mraContract.bigPromoBonus());
-            var buyer1Reward1 = await mraContract.getUserReward(true, false, { from: buyer1 });
+            var totalPromoReward = await mraContract.totalCollectedPromoBonus();
 
-            console.log("total promo reward: " + totalPromoReward.div(1e18).toString(10));
+            var totalBuyerReward = buyer1Reward1.add(buyer2Reward1);
+
+            console.log("promo reward: " + totalPromoReward.div(1e18).toString(10));
             console.log("devReward: " + devReward.div(1e18).toString(10));
-            console.log("buyer1Reward1: " + buyer1Reward1.div(1e18).toString(10));
-            console.log("total-promo-dev-br: " + mraContractEthBalance.sub(devReward).sub(totalPromoReward).sub(buyer1Reward1).div(1e18).toString(10));
-            console.log("bonusPerMntp: " + (await mraContract.bonusPerMntp()).div(1e18).toString(10));
+            console.log("total-promo-dev-br: " + mraContractEthBalance.sub(devReward).sub(totalPromoReward).sub(totalBuyerReward).div(1e18).toString(10));
             
-
         }
 
-        //withdraw all rewards
-        {
-            var buyer1Reward1 = await mraContract.getUserReward(true, true, { from: buyer1 });
-            //if (buyer1Reward1 > 0) await mraContract.withdraw({ from: buyer1 });
-            
-            var devReward = await mraContract.getDevReward({ from: creator });
-            if (devReward > 0) await mraContract.withdrawDevReward(creator, { from: creator });
-
-            assert.equal((await mraContract.devReward()).toString(10), "0");
-
-        }
-
-        var totalPromoReward = (await mraContract.quickPromoBonus()).add(await mraContract.bigPromoBonus());
-
-        var mraContractEthBalance = web3.eth.getBalance(mraContractAddress);
-        console.log("3 (after withdraw all rewards): " + mraContractEthBalance.div(1e18).toString(10));
-        console.log("total promo reward: " + totalPromoReward.div(1e18).toString(10));
-        console.log("devReward: " + (await mraContract.devReward()).div(1e18).toString(10));
-        console.log("bonusPerMntp: " + (await mraContract.bonusPerMntp()).div(1e18).toString(10));
-
-        //assert.equal(mraContractEthBalance.toString(10), "0");
 
     });
     return;
-    */
+    
     it('should make a purchase behalf buyer2', async() => {
 
         var ethAmount = 1.3 * ether;
@@ -330,7 +325,7 @@ describe('MINTARAMA', function() {
             var ethContractBalance1 = web3.eth.getBalance(mraContractAddress);
 
 
-            var userReward1 = await mraContract.getUserReward(true, false, { from: buyer1 });
+            var userReward1 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
             var buyEst = await mraContract.estimateBuyOrder(ethAmount);
 
             var estimateTokenAmount = buyEst[0];
@@ -351,7 +346,7 @@ describe('MINTARAMA', function() {
             var totalShareReward = totalPurchaseFee * shareFeePercent / 100;
             var refReward = totalPurchaseFee * refFeePercent / 100;
             
-            var buyer2Reward1 = await mraContract.getUserReward(false, false, { from: buyer2 });
+            var buyer2Reward1 = await mraContract.getCurrentUserReward(false, false, { from: buyer2 });
             //console.log("buyer2Reward1: " + buyer2Reward1);
 
             var totalTokenSold = await mraContract.getTotalTokenSold();
@@ -372,14 +367,14 @@ describe('MINTARAMA', function() {
                 var ethContractBalance2 = web3.eth.getBalance(mraContractAddress);
                 assert.equal((ethContractBalance2.sub(ethContractBalance1)).toString(10), ethAmount.toString(10));
 
-                var userReward2 = await mraContract.getUserReward(true, false, { from: buyer1 });
+                var userReward2 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
                 //console.log("userReward1: " + userReward1.toString(10) + "; userReward2: " + userReward2.toString(10) + "; esitmatedShareRewardWithoutRefBuyer1: " + esitmatedShareRewardWithoutRefBuyer1.toString(10));
                 assert.equal(Math.abs(userReward2.sub(userReward1).sub(esitmatedShareRewardWithoutRefBuyer1)) < 20, true);
 
                 var devReward2 = await mraContract.getDevReward();
                 assert.equal(estimatedDevReward.toString(10), devReward2.sub(devReward1).toString(10));
 
-                var buyer2Reward2 = await mraContract.getUserReward(false, false, { from: buyer2 });
+                var buyer2Reward2 = await mraContract.getCurrentUserReward(false, false, { from: buyer2 });
                 assert.equal(buyer2Reward2.sub(buyer2Reward1).toString(10), "0");
                     
                 var currentTokenPrice2 = await getCurrentTokenPrice();
@@ -409,12 +404,12 @@ describe('MINTARAMA', function() {
             esitmatedShareRewardWithRefBuyer1 = new BigNumber(Math.floor((totalShareReward / totalTokenSold) * buyer1TokenBalance).toString()); 
             totalRefReward = new BigNumber(totalRefReward.toString());
 
-            buyer1Reward1 = await mraContract.getUserReward(true, false, { from: buyer1 });
+            buyer1Reward1 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
             var totalTokenSold1 = await mraContract.getTotalTokenSold({ from:creator });
 
             await mraContract.buy(buyer1, { from: buyer2, gas: 2900000, value: ethAmount });    
 
-            buyer1Reward2 = await mraContract.getUserReward(true, false, { from: buyer1 });
+            buyer1Reward2 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
 
             //console.log("buyer1Reward1: " + buyer1Reward1.toString(10) + "; buyer1Reward2: " + buyer1Reward2.toString(10) + "; esitmatedShareRewardWithRefBuyer1: " + esitmatedShareRewardWithRefBuyer1.toString(10) + "; totalRefReward: " + totalRefReward.toString(10));
 
@@ -517,8 +512,8 @@ describe('MINTARAMA', function() {
 
             assert(buyer1TokenBalance > tokenAmount);
             
-            var buyer1Reward1 = await mraContract.getUserReward(false, false, { from: buyer1 });
-            var buyer2Reward1 = await mraContract.getUserReward(false, false, { from: buyer2 });
+            var buyer1Reward1 = await mraContract.getCurrentUserReward(false, false, { from: buyer1 });
+            var buyer2Reward1 = await mraContract.getCurrentUserReward(false, false, { from: buyer2 });
 
             var mntpContrantPowhBalance1 = mntContract.balanceOf(mraContractAddress);
 
@@ -553,12 +548,12 @@ describe('MINTARAMA', function() {
 
         await mraContract.sell(tokenAmount, { from: buyer1, gas: 2900000});
         {
-            var buyer2Reward2 = await mraContract.getUserReward(false, false, { from: buyer2 });
+            var buyer2Reward2 = await mraContract.getCurrentUserReward(false, false, { from: buyer2 });
 
             //console.log("buyer2Reward1: " + buyer2Reward1.toString(10) + "; buyer2Reward2: " + buyer2Reward2.toString(10) + "; buyer2EsitmatedShareReward: " + buyer2EsitmatedShareReward.toString(10));
 
             assert(Math.abs(buyer2Reward2.sub(buyer2Reward1).sub(buyer2EsitmatedShareReward)) < 20);   
-            var buyer1Reward2 = await mraContract.getUserReward(false, false, { from: buyer1 });
+            var buyer1Reward2 = await mraContract.getCurrentUserReward(false, false, { from: buyer1 });
             /*
             console.log("buyer1Reward1: " + buyer1Reward1);
             console.log("buyer1Reward2: " + buyer1Reward2);
@@ -602,14 +597,14 @@ describe('MINTARAMA', function() {
     it('should withdraw reward', async() => {
         
         var buyer1EthBalance1 = web3.eth.getBalance(buyer1);
-        var buyer1Reward1 = await mraContract.getUserReward(true, true, { from: buyer1 });
+        var buyer1Reward1 = await mraContract.getCurrentUserReward(true, true, { from: buyer1 });
 
         //console.log("buyer1Reward1: " + buyer1Reward1.toString(10));
         assert(buyer1Reward1 > 0);
         await mraContract.withdraw({ from: buyer1 });
 
         var buyer1EthBalance2 = web3.eth.getBalance(buyer1);
-        var buyer1Reward2 = await mraContract.getUserReward(true, true, { from: buyer1 });
+        var buyer1Reward2 = await mraContract.getCurrentUserReward(true, true, { from: buyer1 });
         //console.log("buyer1Reward2: " + buyer1Reward2.toString(10));
         
         assert(Math.abs(buyer1EthBalance2.sub(buyer1EthBalance1).sub(buyer1Reward1)) < 100000);
@@ -721,7 +716,7 @@ describe('MINTARAMA', function() {
         await mraContract.buy(buyer1, { from: buyer3, gas: 2900000, value: ethAmount });    
 
 
-        var buyer1Reward1 = await mraContract.getUserReward(true, true, { from: buyer1 });
+        var buyer1Reward1 = await mraContract.getCurrentUserReward(true, true, { from: buyer1 });
 
 
         //console.log("buyer1Reward1: " + buyer1Reward1.toString(10));
@@ -738,7 +733,7 @@ describe('MINTARAMA', function() {
 
         await mraContract.reinvest({ from: buyer1, gas: 2900000 });
 
-        var buyer1Reward2 = await mraContract.getUserReward(true, true, { from: buyer1 });
+        var buyer1Reward2 = await mraContract.getCurrentUserReward(true, true, { from: buyer1 });
 
         assert(buyer1Reward2.toString(10) == "0");
 
@@ -813,7 +808,7 @@ describe('MINTARAMA', function() {
         //withdraw all rewards
         {
             accounts.forEach(async(account) => {
-                var buyerReward1 = await mraContract.getUserReward(true, true, { from: account });
+                var buyerReward1 = await mraContract.getCurrentUserReward(true, true, { from: account });
                 if (buyerReward1 > 0) await mraContract.withdraw({ from: account });
             });
             
@@ -824,9 +819,9 @@ describe('MINTARAMA', function() {
         var mraContractEthBalance = web3.eth.getBalance(mraContractAddress);
         console.log("mraContractEthBalance " + mraContractEthBalance);
 
-        var buyer1Reward2 = await mraContract.getUserReward(true, true, { from: buyer1 });
-        var buyer2Reward2 = await mraContract.getUserReward(true, true, { from: buyer2 });
-        var buyer3Reward2 = await mraContract.getUserReward(true, true, { from: buyer3 });
+        var buyer1Reward2 = await mraContract.getCurrentUserReward(true, true, { from: buyer1 });
+        var buyer2Reward2 = await mraContract.getCurrentUserReward(true, true, { from: buyer2 });
+        var buyer3Reward2 = await mraContract.getCurrentUserReward(true, true, { from: buyer3 });
 
         /*
         console.log("buyer1Reward " + buyer1Reward2.toString(10));

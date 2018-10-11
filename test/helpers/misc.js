@@ -684,6 +684,7 @@ function deployMintaramaContract(data,cb){
 
           tempContract.new(
                mntContractAddress,
+               1,
                {
                     from: creator, 
                     // should not exceed 5000000 for Kovan by default
