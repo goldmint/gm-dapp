@@ -6,8 +6,6 @@ contract Mintarama {
 
     uint256 constant internal MAGNITUDE = 2**64;
 
-    //set only buy total fee. sell total fee is calculated due to complex percent
-    uint256 constant public TOTAL_BUY_FEE_PERCENT = 10 ether;
 
     uint256 constant public DEV_REWARD_PERCENT = 40 ether;
     uint256 constant public MNTP_REWARD_PERCENT = 30 ether;
@@ -42,6 +40,7 @@ contract Mintarama {
     uint256 internal _totalSupply;
     int128 internal _realTokenPrice;
 
+    uint256 public totalIncomeFeePercent = 100 ether;
     uint256 public minRefTokenAmount = 1 ether;
     uint256 public initBlockNum;
     uint256 public bonusPerMntp;
@@ -144,6 +143,12 @@ contract Mintarama {
         isActive = !isActive;
     }
 
+    function setTotalIncomeFeePercent(uint256 val) onlyAdministrator public {
+        require(val > 0 && val <= 100 ether);
+
+        totalIncomeFeePercent = val;
+    }
+
     function finish() onlyAdministrator public {
         require(uint(now) >= expirationPeriodDays);
         
@@ -167,21 +172,21 @@ contract Mintarama {
         
         if (tokenAmount > getUserLocalTokenBalance() || tokenAmount == 0) return;
 
-        uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
+        uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
 
-        (taxedEth, ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount);
+        (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount);
 
         subUserTokens(msg.sender, tokenAmount);
 
-        msg.sender.transfer(taxedEth);
+        msg.sender.transfer(ethAmount);
 
         updateTokenPrice(-convert256ToReal(tokenAmount));
 
         distributeFee(totalFeeEth, 0x0);
        
-        onTokenSell(msg.sender, tokenAmount, taxedEth);
+        onTokenSell(msg.sender, tokenAmount, ethAmount);
 
-        return taxedEth;
+        return ethAmount;
     }   
 
     /**
@@ -279,15 +284,15 @@ contract Mintarama {
   
 
     function get1TokenSellPrice() public view returns(uint256) {
-        uint256 taxedEth = 0; uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
-        (taxedEth, ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(1 ether);
+        uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
+        (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(1 ether);
 
-        return taxedEth;
+        return ethAmount;
     }
     
     function get1TokenBuyPrice() public view returns(uint256) {
-        uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0; uint256 tokenPrice = 0;
-        (tokenAmount, totalFeeEth, taxedEth, tokenPrice) = estimateBuyOrder(1 ether);  
+        uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
+        (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(1 ether);  
 
         return SafeMath.div(1 ether * 1 ether, tokenAmount);
     }
@@ -297,23 +302,33 @@ contract Mintarama {
     }  
 
 
-    function estimateBuyOrder(uint256 ethAmount) public view returns(uint256, uint256, uint256, uint256) {
-        uint256 totalFeeEth = calcTotalFee(ethAmount, true);
-        uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
-        uint256 tokenAmount = ethToTokens(taxedEth, true);
+    function estimateBuyOrder(uint256 ethAmount) public view returns(uint256, uint256, uint256) {
+        uint256 totalTokenFee = ethToTokens(ethAmount, true, true) - ethToTokens(ethAmount, true, false);
+        require(totalTokenFee > 0);
+
+        uint256 totalFeeEth = tokensToEth(totalTokenFee, true, true);
+
+        require(totalFeeEth > 0 && ethAmount > totalFeeEth);
+
+        uint256 tokenAmount = ethToTokens(ethAmount, true, false);
+        require(tokenAmount > 0);
+
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
 
-        return (tokenAmount, totalFeeEth, taxedEth, tokenPrice);
+        return (tokenAmount, totalFeeEth, tokenPrice);
     }
     
 
-    function estimateSellOrder(uint256 tokenAmount) public view returns(uint256, uint256, uint256, uint256) {
-        uint256 ethAmount = tokensToEth(tokenAmount, false);
-        uint256 totalFeeEth = calcTotalFee(ethAmount, false);
-        uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
-        uint256 tokenPrice = SafeMath.div(taxedEth * 1 ether, tokenAmount);
+    function estimateSellOrder(uint256 tokenAmount) public view returns(uint256, uint256, uint256) {
+        uint256 ethAmount = tokensToEth(tokenAmount, false, false);
+        require(ethAmount > 0);
 
-        return (taxedEth, ethAmount, totalFeeEth, tokenPrice);
+        uint256 totalFeeEth = tokensToEth(tokenAmount, false, true) - tokensToEth(tokenAmount, false, false);
+        require(totalFeeEth > 0 && ethAmount > totalFeeEth);
+
+        uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
+
+        return (ethAmount, totalFeeEth, tokenPrice);
     }
 
     function getUserMaxPurchase(address userAddress) public view returns(uint256) {
@@ -344,8 +359,8 @@ contract Mintarama {
     
     function purchaseTokens(uint256 ethAmount, address refAddress) internal returns(uint256) {
 
-        uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 taxedEth = 0; uint256 tokenPrice = 0;
-        (tokenAmount, totalFeeEth, taxedEth, tokenPrice) = estimateBuyOrder(ethAmount);
+        uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
+        (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount);
 
         //user has to have at least equal amount of tokens which he's willing to buy 
         require(getCurrentUserMaxPurchase() >= tokenAmount);
@@ -469,34 +484,34 @@ contract Mintarama {
         _realTokenPrice = calc1RealTokenRateFromRealTokens(realTokenAmount);
     }
 
-    function ethToTokens(uint256 ethAmount, bool isBuy) internal view returns(uint256) {
+    function ethToTokens(uint256 ethAmount, bool isBuy, bool isHalfPrice) internal view returns(uint256) {
         int128 realEthAmount = convert256ToReal(ethAmount);
         int128 t0 = RealMath.div(realEthAmount, _realTokenPrice);
-        int128 s = RealMath.div(getRealPriceSpeed(), RealMath.toReal(2));
+        int128 s = RealMath.div( getRealPriceSpeed(), RealMath.toReal(isHalfPrice ? 2 : 1) );
         int128 tns = RealMath.mul(t0, s);
-        int128 exptns = RealMath.exp(RealMath.mul(tns, RealMath.toReal(isBuy ? int40(1) : int40(-1))));
+        int128 exptns = RealMath.exp( RealMath.mul(tns, RealMath.toReal(isBuy ? int40(1) : int40(-1))) );
 
-        int128 tn0 = t0;
+        int128 tn = t0;
 
         for (uint i = 0; i < 10; i++) {
 
             int128 tn1 = RealMath.div(
-                RealMath.mul( RealMath.mul(RealMath.ipow(t0, 2), s), exptns ) + t0,
+                RealMath.mul( RealMath.mul(RealMath.ipow(tn, 2), s), exptns ) + t0,
                 RealMath.mul( exptns, RealMath.toReal(1) + tns )
             );
 
-            if (RealMath.abs(tn0-tn1) < RealMath.div(RealMath.toReal(1), RealMath.toReal(10e10))) break;
+            if (RealMath.abs(tn-tn1) < RealMath.div(RealMath.toReal(1), RealMath.toReal(10e10))) break;
 
-            tn0 = tn1;
+            tn = tn1;
         }
 
 
-        return convertRealTo256(tn0);
+        return convertRealTo256(tn);
     }
 
-    function tokensToEth(uint256 tokenAmount, bool isBuy) internal view returns(uint256) {
+    function tokensToEth(uint256 tokenAmount, bool isBuy, bool isHalfPrice) internal view returns(uint256) {
         int128 realTokenAmount = convert256ToReal(tokenAmount);
-        int128 s = RealMath.div(getRealPriceSpeed(), RealMath.toReal(2));
+        int128 s = RealMath.div( getRealPriceSpeed(), RealMath.toReal(isHalfPrice ? 2 : 1) );
         int128 expArg = RealMath.mul(RealMath.mul(realTokenAmount, s), RealMath.toReal(isBuy ? int40(1) : int40(-1)));
         
         int128 realEthAmountFor1Token = RealMath.mul(_realTokenPrice, RealMath.exp(expArg));
@@ -516,17 +531,6 @@ contract Mintarama {
         return RealMath.div(realPercent, RealMath.toReal(PRICE_SPEED_TOKEN_BLOCK));
     }
 
-    function calcTotalFee(uint256 ethAmount, bool isBuy) internal pure returns(uint256) {
-        uint256 percent = isBuy ? TOTAL_BUY_FEE_PERCENT : getSellFeePercent();
-        return calcPercent(ethAmount, percent);
-    } 
-
-    function getSellFeePercent() internal pure returns(uint256) {
-        int128 buyRealPercent = convert256ToReal(TOTAL_BUY_FEE_PERCENT);
-        int128 sellRealPercent = RealMath.mul(buyRealPercent, RealMath.div(RealMath.toReal(1), RealMath.toReal(1) + RealMath.div(buyRealPercent, RealMath.toReal(100))));
-
-        return convertRealTo256(sellRealPercent);
-    }
 
     function calcTotalShareRewardFee(uint256 totalFee) internal pure returns(uint256) {
         return calcPercent(totalFee, MNTP_REWARD_PERCENT);
@@ -553,17 +557,17 @@ contract Mintarama {
     }
 
     /*
-    * Converts real num to uint256. Works only with positive numbers. Occurancy is 5 fractional digits.
+    * Converts real num to uint256. Works only with positive numbers.
     */
     function convertRealTo256(int128 realVal) internal pure returns(uint256) {
-        return SafeMath.mul(uint256(RealMath.fromReal(RealMath.mul(realVal, RealMath.toReal(1e5)))), uint(1e13));
+        return SafeMath.mul(uint256(RealMath.fromReal(RealMath.mul(realVal, RealMath.toReal(1e8)))), uint256(1e10));
     }
 
     /*
-    * Converts uint256 to real num. Occurancy is 5 fractional digits.
+    * Converts uint256 to real num.
     */
     function convert256ToReal(uint256 val) internal pure returns(int128) {
-        return RealMath.div(RealMath.toReal(int40(SafeMath.div(val, 1e13))), RealMath.toReal(int40(1e5)));
+        return RealMath.div(RealMath.toReal(int40(SafeMath.div(val, 1e10))), RealMath.toReal(int40(1e8)));
     }
 }
 
