@@ -559,16 +559,16 @@ contract Mintarama {
     * Converts real num to uint256. Works only with positive numbers.
     */
     function convertRealTo256(int128 realVal) internal pure returns(uint256) {
-        int128 roundedVal = RealMath.fromReal(RealMath.mul(realVal, RealMath.toReal(1e9)));
+        int128 roundedVal = RealMath.fromReal(RealMath.mul(realVal, RealMath.toReal(1e14)));
 
-        return SafeMath.mul(uint256(roundedVal), uint256(1e9));
+        return SafeMath.mul(uint256(roundedVal), uint256(1e4));
     }
 
     /*
     * Converts uint256 to real num.
     */
     function convert256ToReal(uint256 val) internal pure returns(int128) {
-        return RealMath.fraction(int48(SafeMath.div(val, 1e9)), 1e9);
+        return RealMath.fraction(int64(SafeMath.div(val, 1e4)), 1e14);
     }
 }
 
@@ -668,7 +668,7 @@ library RealMath {
     /**
      * How many fractional bits are there?
      */
-    int256 constant REAL_FBITS = 80;
+    int256 constant REAL_FBITS = 64;
     
     /**
      * How many integer bits are there?
@@ -720,15 +720,15 @@ library RealMath {
     /**
      * Convert an integer to a real. Preserves sign.
      */
-    function toReal(int48 ipart) internal pure returns (int128) {
+    function toReal(int64 ipart) internal pure returns (int128) {
         return int128(ipart) * REAL_ONE;
     }
     
     /**
      * Convert a real to an integer. Preserves sign.
      */
-    function fromReal(int128 real_value) internal pure returns (int48) {
-        return int48(real_value / REAL_ONE);
+    function fromReal(int128 real_value) internal pure returns (int64) {
+        return int64(real_value / REAL_ONE);
     }
     
     /**
@@ -736,8 +736,8 @@ library RealMath {
      */
     function round(int128 real_value) internal pure returns (int128) {
         // First, truncate.
-        int48 ipart = fromReal(real_value);
-        if ((fractionalBits(real_value) & (uint80(1) << (REAL_FBITS - 1))) > 0) {
+        int64 ipart = fromReal(real_value);
+        if ((fractionalBits(real_value) & (uint64(1) << (REAL_FBITS - 1))) > 0) {
             // High fractional bit is set. Round up.
             if (real_value < int128(0)) {
                 // Rounding up for a negative number is rounding down.
@@ -763,8 +763,8 @@ library RealMath {
     /**
      * Returns the fractional bits of a real. Ignores the sign of the real.
      */
-    function fractionalBits(int128 real_value) internal pure returns (uint80) {
-        return uint80(abs(real_value) % REAL_ONE);
+    function fractionalBits(int128 real_value) internal pure returns (uint64) {
+        return uint64(abs(real_value) % REAL_ONE);
     }
     
     /**
@@ -813,7 +813,7 @@ library RealMath {
     /**
      * Create a real from a rational fraction.
      */
-    function fraction(int48 numerator, int48 denominator) internal pure returns (int128) {
+    function fraction(int64 numerator, int64 denominator) internal pure returns (int128) {
         return div(toReal(numerator), toReal(denominator));
     }
     
@@ -825,7 +825,7 @@ library RealMath {
      * Raise a number to a positive integer power in O(log power) time.
      * See <https://stackoverflow.com/a/101613>
      */
-    function ipow(int128 real_base, int48 exponent) internal pure returns (int128) {
+    function ipow(int128 real_base, int64 exponent) internal pure returns (int128) {
         if (exponent < 0) {
             // Negative powers are not allowed here.
             revert();
@@ -915,17 +915,17 @@ library RealMath {
      *
      * Rejects 0 or negative arguments.
      */
-    function rescale(int128 real_arg) internal pure returns (int128 real_scaled, int48 shift) {
+    function rescale(int128 real_arg) internal pure returns (int128 real_scaled, int64 shift) {
         if (real_arg <= 0) {
             // Not in domain!
             revert();
         }
         
         // Find the high bit
-        int48 high_bit = findbit(hibit(uint256(real_arg)));
+        int64 high_bit = findbit(hibit(uint256(real_arg)));
         
         // We'll shift so the high bit is the lowest non-fractional bit.
-        shift = high_bit - int48(REAL_FBITS);
+        shift = high_bit - int64(REAL_FBITS);
         
         if (shift < 0) {
             // Shift left
@@ -960,7 +960,7 @@ library RealMath {
         
         // We know it's positive, so rescale it to be between [1 and 2)
         int128 real_rescaled;
-        int48 shift;
+        int64 shift;
         (real_rescaled, shift) = rescale(real_arg);
         
         // Compute the argument to iterate on
@@ -969,7 +969,7 @@ library RealMath {
         // We will accumulate the result here
         int128 real_series_result = 0;
         
-        for (int48 n = 0; n < max_iterations; n++) {
+        for (int64 n = 0; n < max_iterations; n++) {
             // Compute term n of the series
             int128 real_term = div(ipow(real_series_arg, 2 * n + 1), toReal(2 * n + 1));
             // And add it in
@@ -1015,7 +1015,7 @@ library RealMath {
         // We use this to save work computing terms
         int128 real_term = REAL_ONE;
         
-        for (int48 n = 0; n < max_iterations; n++) {
+        for (int64 n = 0; n < max_iterations; n++) {
             // Add in the term
             real_result += real_term;
             
@@ -1095,7 +1095,7 @@ library RealMath {
     /**
      * Compute the sin of a number to a certain number of Taylor series terms.
      */
-    function sinLimited(int128 real_arg, int48 max_iterations) internal pure returns (int128) {
+    function sinLimited(int128 real_arg, int64 max_iterations) internal pure returns (int128) {
         // First bring the number into 0 to 2 pi
         // TODO: This will introduce an error for very large numbers, because the error in our Pi will compound.
         // But for actual reasonable angle values we should be fine.
@@ -1104,7 +1104,7 @@ library RealMath {
         int128 accumulator = REAL_ONE;
         
         // We sum from large to small iteration so that we can have higher powers in later terms
-        for (int48 iteration = max_iterations - 1; iteration >= 0; iteration--) {
+        for (int64 iteration = max_iterations - 1; iteration >= 0; iteration--) {
             accumulator = REAL_ONE - mul(div(mul(real_arg, real_arg), toReal((2 * iteration + 2) * (2 * iteration + 3))), accumulator);
             // We can't stop early; we need to make it to the first term.
         }
