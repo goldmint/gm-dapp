@@ -2,7 +2,7 @@ const BigNumber = require('bignumber.js')
 
 var obj = module.exports
 
-obj.REAL_FBITS = 88
+obj.REAL_FBITS = 64
 obj.REAL_ONE = (new BigNumber(2)).pow(obj.REAL_FBITS)
 
 obj.fromReal = function(real) {

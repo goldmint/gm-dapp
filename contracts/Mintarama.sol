@@ -1,8 +1,48 @@
 pragma solidity ^0.4.18;
 
+contract MintaramaData {
+
+    uint256 constant public DEV_REWARD_PERCENT = 40 ether;
+    uint256 constant public MNTP_REWARD_PERCENT = 30 ether;
+    uint256 constant public REF_BONUS_PERCENT = 20 ether;
+    uint256 constant public BIG_PROMO_PERCENT = 5 ether;
+    uint256 constant public QUICK_PROMO_PERCENT = 5 ether;
+
+    uint128 public BIG_PROMO_BLOCK_INTERVAL = 9999;
+    uint128 public QUICK_PROMO_BLOCK_INTERVAL = 100;
+    uint256 public PROMO_MIN_PURCHASE = 100 ether;
+
+    int64 public PRICE_SPEED_PERCENT = 5;
+    int64 public PRICE_SPEED_TOKEN_BLOCK = 10000;
+
+
+    uint256 constant public TOKEN_PRICE_INITIAL = 0.01 ether;
+
+    mapping(address => uint256) internal _userTokenBalances;
+    mapping(address => uint256) internal _refBalances;
+    mapping(address => uint256) internal _rewardPayouts;
+    mapping(address => uint256) internal _promoBonuses;
+
+    mapping(bytes32 => bool) public _administrators;
+    
+    uint256 internal _totalSupply;
+    int128 internal _realTokenPrice;
+
+    uint256 public totalIncomeFeePercent = 100 ether;
+    uint256 public minRefTokenAmount = 1 ether;
+    uint256 public initBlockNum;
+    uint256 public bonusPerMntp;
+    uint256 public devReward;
+    uint256 public currentBigPromoBonus;
+    uint256 public currentQuickPromoBonus;
+    uint256 public totalCollectedPromoBonus;
+
+}
+
 contract Mintarama {
 
     IMNTP _mntpToken;
+    MintaramaData _data;
 
     uint256 constant internal MAGNITUDE = 2**64;
 
@@ -17,23 +57,16 @@ contract Mintarama {
     uint128 public QUICK_PROMO_BLOCK_INTERVAL = 100;
     uint256 public PROMO_MIN_PURCHASE = 100 ether;
 
-    int40 public PRICE_SPEED_PERCENT = 5;
-    int40 public PRICE_SPEED_TOKEN_BLOCK = 10000;
+    int64 public PRICE_SPEED_PERCENT = 5;
+    int64 public PRICE_SPEED_TOKEN_BLOCK = 10000;
 
 
     uint256 constant public TOKEN_PRICE_INITIAL = 0.01 ether;
-    
-    // ambassador program
-    mapping(address => bool) internal _ambassadors;
-    uint256 constant internal _ambassadorMaxPurchase = 1 ether;
-    uint256 constant internal _ambassadorQuota = 20 ether;
-
 
     mapping(address => uint256) internal _userTokenBalances;
     mapping(address => uint256) internal _refBalances;
     mapping(address => uint256) internal _rewardPayouts;
     mapping(address => uint256) internal _promoBonuses;
-    mapping(address => uint256) internal _ambassadorAccumulatedQuota;    
 
     mapping(bytes32 => bool) public _administrators;
     
@@ -130,9 +163,9 @@ contract Mintarama {
         QUICK_PROMO_BLOCK_INTERVAL = val;
     }
 
-    function setPriceSpeed(uint40 speedPercent, uint40 speedTokenBlock) onlyAdministrator public {
-        PRICE_SPEED_PERCENT = int40(speedPercent);
-        PRICE_SPEED_TOKEN_BLOCK = int40(speedTokenBlock);
+    function setPriceSpeed(uint64 speedPercent, uint64 speedTokenBlock) onlyAdministrator public {
+        PRICE_SPEED_PERCENT = int64(speedPercent);
+        PRICE_SPEED_TOKEN_BLOCK = int64(speedTokenBlock);
     }
 
     function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
@@ -161,7 +194,7 @@ contract Mintarama {
     /**
      * Converts incoming eth to tokens
      */
-    function buy(address refAddress) onlyActive public payable returns(uint256){
+    function buy(address refAddress) onlyActive public payable returns(uint256) {
         return purchaseTokens(msg.value, refAddress);
     }
 
@@ -173,7 +206,6 @@ contract Mintarama {
         if (tokenAmount > getUserLocalTokenBalance() || tokenAmount == 0) return;
 
         uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
-
         (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount);
 
         subUserTokens(msg.sender, tokenAmount);
@@ -284,17 +316,21 @@ contract Mintarama {
   
 
     function get1TokenSellPrice() public view returns(uint256) {
+        uint256 tokenAmount = 1 ether;
+
         uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
-        (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(1 ether);
+        (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount);
 
         return ethAmount;
     }
     
     function get1TokenBuyPrice() public view returns(uint256) {
-        uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
-        (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(1 ether);  
+        uint256 ethAmount = 1 ether;
 
-        return SafeMath.div(1 ether * 1 ether, tokenAmount);
+        uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
+        (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount);  
+
+        return SafeMath.div(ethAmount * 1 ether, tokenAmount);
     }
 
     function calculateReward(uint256 tokenAmount) public view returns(uint256) {
@@ -303,11 +339,10 @@ contract Mintarama {
 
 
     function estimateBuyOrder(uint256 ethAmount) public view returns(uint256, uint256, uint256) {
-        uint256 totalTokenFee = ethToTokens(ethAmount, true, true) - ethToTokens(ethAmount, true, false);
+        uint256 totalTokenFee = calcPercent(ethToTokens(ethAmount, true, true) - ethToTokens(ethAmount, true, false), totalIncomeFeePercent);
         require(totalTokenFee > 0);
 
         uint256 totalFeeEth = tokensToEth(totalTokenFee, true, true);
-
         require(totalFeeEth > 0 && ethAmount > totalFeeEth);
 
         uint256 tokenAmount = ethToTokens(ethAmount, true, false);
@@ -323,7 +358,7 @@ contract Mintarama {
         uint256 ethAmount = tokensToEth(tokenAmount, false, false);
         require(ethAmount > 0);
 
-        uint256 totalFeeEth = tokensToEth(tokenAmount, false, true) - tokensToEth(tokenAmount, false, false);
+        uint256 totalFeeEth = calcPercent(tokensToEth(tokenAmount, false, true) - tokensToEth(tokenAmount, false, false), totalIncomeFeePercent);
         require(totalFeeEth > 0 && ethAmount > totalFeeEth);
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
@@ -489,7 +524,7 @@ contract Mintarama {
         int128 t0 = RealMath.div(realEthAmount, _realTokenPrice);
         int128 s = RealMath.div( getRealPriceSpeed(), RealMath.toReal(isHalfPrice ? 2 : 1) );
         int128 tns = RealMath.mul(t0, s);
-        int128 exptns = RealMath.exp( RealMath.mul(tns, RealMath.toReal(isBuy ? int40(1) : int40(-1))) );
+        int128 exptns = RealMath.exp( RealMath.mul(tns, RealMath.toReal(isBuy ? int64(1) : int64(-1))) );
 
         int128 tn = t0;
 
@@ -500,7 +535,7 @@ contract Mintarama {
                 RealMath.mul( exptns, RealMath.toReal(1) + tns )
             );
 
-            if (RealMath.abs(tn-tn1) < RealMath.fraction(1, 10e10)) break;
+            if (RealMath.abs(tn-tn1) < RealMath.fraction(1, 1e18)) break;
 
             tn = tn1;
         }
@@ -512,7 +547,7 @@ contract Mintarama {
     function tokensToEth(uint256 tokenAmount, bool isBuy, bool isHalfPrice) internal view returns(uint256) {
         int128 realTokenAmount = convert256ToReal(tokenAmount);
         int128 s = RealMath.div( getRealPriceSpeed(), RealMath.toReal(isHalfPrice ? 2 : 1) );
-        int128 expArg = RealMath.mul(RealMath.mul(realTokenAmount, s), RealMath.toReal(isBuy ? int40(1) : int40(-1)));
+        int128 expArg = RealMath.mul(RealMath.mul(realTokenAmount, s), RealMath.toReal(isBuy ? int64(1) : int64(-1)));
         
         int128 realEthAmountFor1Token = RealMath.mul(_realTokenPrice, RealMath.exp(expArg));
         int128 realEthAmount = RealMath.mul(realTokenAmount, realEthAmountFor1Token);
@@ -551,7 +586,7 @@ contract Mintarama {
         return calcPercent(totalFee, BIG_PROMO_PERCENT);
     }        
     
-    function calcPercent(uint256 amount, uint256 percent) internal pure returns(uint256) {
+    function calcPercent(uint256 amount, uint256 percent) public pure returns(uint256) {
         return SafeMath.div(SafeMath.mul(SafeMath.div(amount, 100), percent), 1 ether);
     }
 
