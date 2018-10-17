@@ -685,10 +685,11 @@ function deployMintaramaContract(data,cb){
           tempContract.new(
                mntContractAddress,
                1,
+               0,
                {
                     from: creator, 
                     // should not exceed 5000000 for Kovan by default
-                    gas: 4995000,
+                    gas: 49950000,
                     data: '0x' + bytecode
                }, 
                function(err, c){
