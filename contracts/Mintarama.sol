@@ -383,7 +383,6 @@ contract Mintarama {
         _;
     }
 
-
     function Mintarama(address mntpTokenAddress, uint64 expirationInDays, address dataContractAddress) public {
         _mntpToken = IMNTP(mntpTokenAddress);
         
@@ -392,7 +391,7 @@ contract Mintarama {
         _data.init(expirationInDays, convert256ToReal(_data.getTokenInitialPrice()));
         _data.addAdministator(msg.sender);
     }
-    
+
     function addAdministator(address addr) onlyAdministrator public {
         _data.addAdministator(addr);
     }
@@ -409,83 +408,7 @@ contract Mintarama {
         _data.setTotalSupply(val);
     }
 
-    function getTokenInitialPrice() public view returns(uint256) {
-        return _data.getTokenInitialPrice();
-    }
-
-    function getDevRewardPercent() public view returns(uint256) {
-        return _data.getDevRewardPercent();
-    }
     
-    function getMntpRewardPercent() public view returns(uint256) {
-        return _data.getMntpRewardPercent();
-    }
-    
-    function getRefBonusPercent() public view returns(uint256) {
-        return _data.getRefBonusPercent();
-    }
-    
-    function getBigPromoPercent() public view returns(uint256) {
-        return _data.getBigPromoPercent();
-    }
-    
-    function getQuickPromoPercent() public view returns(uint256) {
-        return _data.getQuickPromoPercent();
-    }
-
-
-    function setBigPromoInterval(uint128 val) onlyAdministrator public {
-        _data.setBigPromoInterval(val);
-    }
-
-    function getBigPromoInterval() public view returns(uint256) {
-        return _data.getBigPromoInterval();
-    }
-
-    function setQuickPromoInterval(uint128 val) onlyAdministrator public {
-        _data.setQuickPromoInterval(val);
-    }
-
-    function getQuickPromoInterval() public view returns(uint256) {
-        return _data.getQuickPromoInterval();
-    }
-
-    function getPromoMinTokenPurchase() public view returns(uint256) {
-        return _data.getPromoMinTokenPurchase();
-    }
-
-    function setPriceSpeed(uint64 speedPercent, uint64 speedTokenBlock) onlyAdministrator public {
-        _data.setPriceSpeed(speedPercent, speedTokenBlock);
-    }
-
-    function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
-        _data.setMinRefTokenAmount(val);
-    }
-
-    function switchActive() onlyAdministrator public {
-        _data.switchActive();
-    }
-
-    function setTotalIncomeFeePercent(uint256 val) onlyAdministrator public {
-        _data.setTotalIncomeFeePercent(val);
-    }
-
-    function getMinRefTokenAmount() public view returns (uint256) {
-        return _data.getMinRefTokenAmount();
-    }    
-
-    function getTotalCollectedPromoBonus() public view returns (uint256) {
-        return _data.getTotalCollectedPromoBonus();
-    }   
-
-    function getCurrentBigPromoBonus() public view returns (uint256) {
-        return _data.getCurrentBigPromoBonus();
-    }  
-
-    function getCurrentQuickPromoBonus() public view returns (uint256) {
-        return _data.getCurrentQuickPromoBonus();
-    }    
-
     function finish() onlyAdministrator public {
         require(uint(now) >= _data.getExpirationPeriodDays());
         
@@ -567,6 +490,86 @@ contract Mintarama {
     
 
     /* HELPERS */  
+
+    function getDataContractAddress() public view returns(address) {
+        return address(_data);
+    }
+
+    function getTokenInitialPrice() public view returns(uint256) {
+        return _data.getTokenInitialPrice();
+    }
+
+    function getDevRewardPercent() public view returns(uint256) {
+        return _data.getDevRewardPercent();
+    }
+    
+    function getMntpRewardPercent() public view returns(uint256) {
+        return _data.getMntpRewardPercent();
+    }
+    
+    function getRefBonusPercent() public view returns(uint256) {
+        return _data.getRefBonusPercent();
+    }
+    
+    function getBigPromoPercent() public view returns(uint256) {
+        return _data.getBigPromoPercent();
+    }
+    
+    function getQuickPromoPercent() public view returns(uint256) {
+        return _data.getQuickPromoPercent();
+    }
+
+    function setBigPromoInterval(uint128 val) onlyAdministrator public {
+        _data.setBigPromoInterval(val);
+    }
+
+    function getBigPromoInterval() public view returns(uint256) {
+        return _data.getBigPromoInterval();
+    }
+
+    function setQuickPromoInterval(uint128 val) onlyAdministrator public {
+        _data.setQuickPromoInterval(val);
+    }
+
+    function getQuickPromoInterval() public view returns(uint256) {
+        return _data.getQuickPromoInterval();
+    }
+
+    function getPromoMinTokenPurchase() public view returns(uint256) {
+        return _data.getPromoMinTokenPurchase();
+    }
+
+    function setPriceSpeed(uint64 speedPercent, uint64 speedTokenBlock) onlyAdministrator public {
+        _data.setPriceSpeed(speedPercent, speedTokenBlock);
+    }
+
+    function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
+        _data.setMinRefTokenAmount(val);
+    }
+
+    function switchActive() onlyAdministrator public {
+        _data.switchActive();
+    }
+
+    function setTotalIncomeFeePercent(uint256 val) onlyAdministrator public {
+        _data.setTotalIncomeFeePercent(val);
+    }
+
+    function getMinRefTokenAmount() public view returns (uint256) {
+        return _data.getMinRefTokenAmount();
+    }    
+
+    function getTotalCollectedPromoBonus() public view returns (uint256) {
+        return _data.getTotalCollectedPromoBonus();
+    }   
+
+    function getCurrentBigPromoBonus() public view returns (uint256) {
+        return _data.getCurrentBigPromoBonus();
+    }  
+
+    function getCurrentQuickPromoBonus() public view returns (uint256) {
+        return _data.getCurrentQuickPromoBonus();
+    }    
 
     function getCurrentTokenPrice() public view returns(uint256) {
         return convertRealTo256(_data.getRealTokenPrice());
