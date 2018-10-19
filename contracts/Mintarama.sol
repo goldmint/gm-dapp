@@ -62,7 +62,7 @@ contract MintaramaData {
         _controllerAddress = msg.sender;
     }
 
-    function setControllerAddress(address newAddress) onlyController public {
+    function setNewControllerAddress(address newAddress) onlyController public {
         _controllerAddress = newAddress;
     }
 
@@ -155,6 +155,10 @@ contract MintaramaData {
 
     function switchActive() onlyController public {
         _isActive = !_isActive;
+    }
+
+    function setActive(bool val) onlyController public {
+        _isActive = val;
     }
     
     function isActive() public view returns(bool) {
@@ -336,6 +340,8 @@ contract Mintarama {
     IMNTP _mntpToken;
     MintaramaData _data;
 
+    address _oldControllerAddress;
+
     uint256 constant internal MAGNITUDE = 2**64;
 
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
@@ -383,13 +389,16 @@ contract Mintarama {
         _;
     }
 
-    function Mintarama(address mntpTokenAddress, uint64 expirationInDays, address dataContractAddress) public {
+    function Mintarama(address mntpTokenAddress, address dataContractAddress, address oldControllerAddress, uint64 expirationInDays) public {
         _mntpToken = IMNTP(mntpTokenAddress);
+        _oldControllerAddress = oldControllerAddress;
         
         _data = dataContractAddress != 0x0 ? MintaramaData(dataContractAddress) : new MintaramaData();
         
-        _data.init(expirationInDays, convert256ToReal(_data.getTokenInitialPrice()));
-        _data.addAdministator(msg.sender);
+        if (dataContractAddress == 0x0) {
+            _data.init(expirationInDays, convert256ToReal(_data.getTokenInitialPrice()));
+            _data.addAdministator(msg.sender);
+        }
     }
 
     function addAdministator(address addr) onlyAdministrator public {
@@ -412,10 +421,10 @@ contract Mintarama {
     function finish() onlyAdministrator public {
         require(uint(now) >= _data.getExpirationPeriodDays());
         
-        _mntpToken.transfer(msg.sender, getRemainTokenAmount());   
+        _mntpToken.transfer(msg.sender, getRemainingTokenAmount());   
         msg.sender.transfer(getTotalEthBalance());
         
-        if (_data.isActive()) _data.switchActive();
+        _data.setActive(false);
     }
 
     /**
@@ -452,7 +461,7 @@ contract Mintarama {
      * Fallback function to handle ethereum that was send straight to the contract
      */
     function() onlyActive public payable {
-        purchaseTokens(msg.value, 0x0);
+        if (msg.sender != _oldControllerAddress) purchaseTokens(msg.value, 0x0);
     }
 
     /**
@@ -490,9 +499,27 @@ contract Mintarama {
     
 
     /* HELPERS */  
+    
+    function isCurrentUserAdministrator() public view returns(bool) {
+        return _data.isAdministrator(msg.sender);
+    }
 
+    //data contract address where all the data is holded
     function getDataContractAddress() public view returns(address) {
         return address(_data);
+    }
+    
+    //set new controller address in case of some mistake in the contract and transfer there all the tokens and eth.
+    function setNewControllerContractAddress(address addr) onlyAdministrator public {
+        require(addr != 0x0);
+
+        _data.setNewControllerAddress(addr);
+
+        uint256 remainingTokenAmount = getRemainingTokenAmount();
+        uint256 ethBalance = getTotalEthBalance();
+
+        if (remainingTokenAmount > 0) _mntpToken.transfer(addr, remainingTokenAmount); 
+        if (ethBalance > 0) addr.transfer(ethBalance);
     }
 
     function getTokenInitialPrice() public view returns(uint256) {
@@ -587,12 +614,12 @@ contract Mintarama {
         return _data.getTotalSupply();
     }
 
-    function getRemainTokenAmount() public view returns(uint256) {
+    function getRemainingTokenAmount() public view returns(uint256) {
         return _mntpToken.balanceOf(address(this));
     }
 
     function getTotalTokenSold() public view returns(uint256) {
-        return _data.getTotalSupply() - getRemainTokenAmount();
+        return _data.getTotalSupply() - getRemainingTokenAmount();
     }
 
     function getLocalTokenBalance(address userAddress) public view returns(uint256) {
@@ -697,6 +724,20 @@ contract Mintarama {
         return block.number - _data.getInitBlockNum();
     }
 
+    function getQuickPromoRemainingBlocks() public view returns(uint256) {
+        uint256 d = getBlockNumSinceInit() % _data.getQuickPromoInterval();
+        d = d == 0 ? _data.getQuickPromoInterval() : d;
+
+        return _data.getQuickPromoInterval() - d;
+    }
+
+    function getBigPromoRemainingBlocks() public view returns(uint256) {
+        uint256 d = getBlockNumSinceInit() % _data.getBigPromoInterval();
+        d = d == 0 ? _data.getBigPromoInterval() : d;
+
+        return _data.getBigPromoInterval() - d;
+    }    
+
     // INTERNAL FUNCTIONS
     
     function purchaseTokens(uint256 ethAmount, address refAddress) internal returns(uint256) {
@@ -749,10 +790,8 @@ contract Mintarama {
     function checkAndSendPromoBonus(uint256 purchaedTokenAmount) internal {
         if (purchaedTokenAmount < _data.getPromoMinTokenPurchase()) return;
 
-        uint256 blockNumSinceInit = getBlockNumSinceInit();
-
-        if (blockNumSinceInit % _data.getQuickPromoInterval() == 0) sendQuickPromoBonus();
-        if (blockNumSinceInit % _data.getBigPromoInterval() == 0) sendBigPromoBonus();
+        if (getQuickPromoRemainingBlocks() == 0) sendQuickPromoBonus();
+        if (getBigPromoRemainingBlocks() == 0) sendBigPromoBonus();
     }
 
     function sendQuickPromoBonus() internal {

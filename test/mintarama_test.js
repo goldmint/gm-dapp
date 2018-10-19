@@ -25,6 +25,12 @@ var mntContract;
 var mraContractAddress;
 var mraContract;
 
+var mraContractAddressOld;
+var mraContractOld;
+
+var oldMintaramaControllerAddress = 0x0;
+var dataContractAddress = 0x0;
+
 var ether = 1000000000000000000;
 var initTotalTokenSupply = 0;
 var shareFeePercent = 0;    
@@ -643,8 +649,9 @@ describe('MINTARAMA', function() {
             if (blockNum % quickPromoInterval == 0) await mraContract.buy(0x0, { from: buyer1, gas: 2900000, value: 0.01 * ether });
             await updateBlockNum();
 
-
+            //should win a quick promo
             while(blockNum % quickPromoInterval != 0) {
+                console.log("rem block: " + await mraContract.getQuickPromoRemainingBlocks())
                 var promoBonus = await mraContract.getPromoBonus({ from: buyer1 });
                 //console.log("1 - blockNum: " + blockNum + "; promoBonus: " + promoBonus.toString(10) +"; promoBonus1: " + promoBonus1.toString(10));
 
@@ -657,7 +664,7 @@ describe('MINTARAMA', function() {
             }
 
             var promoBonus2 = await mraContract.getPromoBonus({ from: buyer1 });
-            //console.log("promoBonus2: " + promoBonus2);
+            console.log("promoBonus2: " + promoBonus2);
             assert(promoBonus2.sub(promoBonus1) > 0);
 
             await updateBlockNum();
@@ -665,7 +672,10 @@ describe('MINTARAMA', function() {
             
             await updateBlockNum();
 
+            //should win a quick promo
             while(blockNum % bigPromoInterval != 0) {
+                console.log("rem block: " + await mraContract.getBigPromoRemainingBlocks())
+
                 var promoBonus = await mraContract.getPromoBonus({ from: buyer1 });
 
                 assert(promoBonus.sub(promoBonus2) == 0);
@@ -676,7 +686,7 @@ describe('MINTARAMA', function() {
             }
 
             var promoBonus3 = await mraContract.getPromoBonus({ from: buyer1 });
-
+            console.log("promoBonus3: " + promoBonus3);
             assert(promoBonus3.sub(promoBonus2) > 0);
         }
     });
@@ -919,5 +929,88 @@ describe('MINTARAMA', function() {
         assert(Math.abs(tokenPrice - startTokenPrice) < 1E-12);        
     });
 
+
+});
+
+describe('MINTARAMA NEW CONTROLLER', function(){
+
+    before("Initialize everything", function(done) {
+        web3.eth.getAccounts(function(err, as) {
+
+                if(err) {
+                    done(err);
+                    return;
+                }
+
+                var i = 0;
+                as.forEach(a => { addAccount(a, i == 0 ? "creator" : "buyer" + i); i++; });
+
+                creator = as[0];
+                buyer1 = as[1];
+                buyer2 = as[2];
+                buyer3 = as[3];
+                buyer4 = as[4];
+                buyer5 = as[5];
+
+                done();
+        });
+    });
+
+    after("Deinitialize everything", function(done) {
+        done();
+    });    
+
+    it('should deploy token contract', function(done) {
+        var data = {};
+
+        mraContractOld = mraContract;
+        mraContractAddressOld = mraContractAddress;
+        oldMintaramaControllerAddress = mraContractAddress;
+
+        mraContract.getDataContractAddress(data, function(err, res){
+
+            dataContractAddress = res;
+
+            console.log("dataContractAddress: " + dataContractAddress);
+
+            deployMintaramaContract(data, function(err){
+                assert.equal(err,null);
+    
+                done();
+            });
+
+        });
+
+    });
+
+    it('should change controller', async() => {
+
+        await mraContractOld.buy(0x0, { from: buyer1, gas: 2900000, value: 2 * ether });
+
+        var oldContractTokenBalance = await mraContractOld.getRemainingTokenAmount();
+        var oldContractEthBalance = await mraContractOld.getTotalEthBalance();
+        var buyer1TokenBalance1 = await mraContractOld.getUserLocalTokenBalance({ from: buyer1 });
+
+        assert(oldContractTokenBalance > 0);
+        assert(oldContractEthBalance > 0);
+        assert(buyer1TokenBalance1 > 0);
+
+
+        await mraContractOld.setNewControllerContractAddress(mraContractAddress, { from: creator, gas: 300000 });
+
+        assert(await mraContract.getDataContractAddress(), await mraContractOld.getDataContractAddress());
+
+        var buyer1TokenBalance2 = await mraContract.getUserLocalTokenBalance({ from: buyer1 });
+        assert.equal(buyer1TokenBalance2.toString(10), buyer1TokenBalance1.toString(10));
+
+
+        var newContractTokenBalance = await mraContract.getRemainingTokenAmount();
+        var newContractEthBalance = await mraContract.getTotalEthBalance();
+
+        assert.equal(newContractTokenBalance.toString(10), oldContractTokenBalance.toString(10));
+        assert.equal(await mraContractOld.getRemainingTokenAmount().toString(10), "0");
+
+        assert.equal(newContractEthBalance.toString(10), oldContractEthBalance.toString(10));
+    });
 
 });
