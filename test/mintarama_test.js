@@ -28,7 +28,6 @@ var mraContract;
 var mraContractAddressOld;
 var mraContractOld;
 
-var oldMintaramaControllerAddress = 0x0;
 var dataContractAddress = 0x0;
 
 var ether = 1000000000000000000;
@@ -158,12 +157,6 @@ describe('MINTARAMA', function() {
 
         assert.equal(mraContractTokenAmount, mntContract.balanceOf(mraContractAddress));
 
-        await mraContract.setTotalSupply(mraContractTokenAmount, { from: creator, gas: 2900000 });
-        
-        var totalSupply = await mraContract.getTotalTokenSupply();
-
-        assert.equal(totalSupply.sub(mraContractTokenAmount).toString(10), "0".toString(10));
-
         var buyerTokenAmount = 100000*ether;
 
         await mntContract.issueTokens(buyer2, buyerTokenAmount, { from: creator, gas: 2900000 });
@@ -191,7 +184,7 @@ describe('MINTARAMA', function() {
     it('init vars', async() => {
         shareFeePercent = await mraContract.getMntpRewardPercent().div(1e18);    
         refFeePercent = await mraContract.getRefBonusPercent().div(1e18);
-        initTotalTokenSupply = await mraContract.getTotalTokenSupply(); 
+
         priceSpeed = realMath.fromReal(await mraContract.getRealPriceSpeed());  
         devRewardPercent = await mraContract.getDevRewardPercent().div(1e18);
         startTokenPrice = await mraContract.getTokenInitialPrice().div(1e18);
@@ -207,6 +200,8 @@ describe('MINTARAMA', function() {
 
         promoMinPurchase = await mraContract.getPromoMinTokenPurchase();
         minRefTokenAmount = await mraContract.getMinRefTokenAmount();
+
+        await mraContract.setActive(true, { from: creator });
     });
 
     it('test estimations', async() => {
@@ -260,9 +255,6 @@ describe('MINTARAMA', function() {
             var estimatedDevReward = Math.floor((devRewardPercent.add(shareFeePercent).add(refFeePercent)) * totalPurchaseFee / 100);
             //var estimatedDevReward = Math.floor((devRewardPercent) * totalPurchaseFee / 100);
             var devReward1 = await mraContract.getDevReward();
-
-            var totalTokenSold1 = await mraContract.getTotalTokenSold({ from:creator });
-            assert.equal(totalTokenSold1.toString(10), "0");
         }
         
         await mraContract.buy(0x0, { from: buyer1, gas: 2900000, value: ethAmount });
@@ -290,9 +282,11 @@ describe('MINTARAMA', function() {
             //console.log("currentTokenPrice2: " + currentTokenPrice2)
 
             var totalTokenSold2 = await mraContract.getTotalTokenSold({ from:creator });
-            assert(totalTokenSold2.sub(totalTokenSold1).toString(10), estimateTokenAmount.toString(10));
+            assert(totalTokenSold2.toString(10), estimateTokenAmount.toString(10));
             
             assert.equal(web3.eth.getBalance(mraContractAddress).toString(10), ethAmount.toString(10));
+
+            initTotalTokenSupply = await mraContract.getTotalTokenSupply(); 
         }
     });
 
@@ -932,6 +926,7 @@ describe('MINTARAMA', function() {
 
 });
 
+
 describe('MINTARAMA NEW CONTROLLER', function(){
 
     before("Initialize everything", function(done) {
@@ -965,7 +960,6 @@ describe('MINTARAMA NEW CONTROLLER', function(){
 
         mraContractOld = mraContract;
         mraContractAddressOld = mraContractAddress;
-        oldMintaramaControllerAddress = mraContractAddress;
 
         mraContract.getDataContractAddress(data, function(err, res){
 
@@ -1011,6 +1005,17 @@ describe('MINTARAMA NEW CONTROLLER', function(){
         assert.equal(await mraContractOld.getRemainingTokenAmount().toString(10), "0");
 
         assert.equal(newContractEthBalance.toString(10), oldContractEthBalance.toString(10));
+    });
+
+    it('old controller should not receive ethers anymore', function(done) {
+        mraContractOld.buy(0x0, { from: buyer1, gas: 2900000, value: 2 * ether }, function(err, res) {
+            assert.notEqual(err, null);
+
+            web3.eth.sendTransaction({ from: buyer3, to: mraContractAddressOld, value: 2 * ether, gas: 2900000 }, function(err1, res) {
+                assert.notEqual(err1, null);
+                done();
+            });
+        });
     });
 
 });

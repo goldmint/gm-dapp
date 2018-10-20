@@ -685,7 +685,6 @@ function deployMintaramaContract(data,cb){
           tempContract.new(
                mntContractAddress,
                dataContractAddress,
-               oldMintaramaControllerAddress,
                1,
                {
                     from: creator, 

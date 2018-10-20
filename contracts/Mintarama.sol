@@ -44,9 +44,6 @@ contract MintaramaData {
     uint256 private _totalCollectedPromoBonus;
 
     
-    bool private _isActive;
-    
-    
     uint256 private _totalSupply;
     int128 private _realTokenPrice;
 
@@ -153,18 +150,6 @@ contract MintaramaData {
         return _administrators[keccak256(addr)];
     }
 
-    function switchActive() onlyController public {
-        _isActive = !_isActive;
-    }
-
-    function setActive(bool val) onlyController public {
-        _isActive = val;
-    }
-    
-    function isActive() public view returns(bool) {
-        return _isActive;
-    }
-
     function setTotalIncomeFeePercent(uint256 val) onlyController public {
         require(val > 0 && val <= 100 ether);
 
@@ -241,7 +226,6 @@ contract MintaramaData {
         _initTime = uint64(now);
         _expirationPeriodDays = _initTime + expPeriodDays * 1 days;
         _realTokenPrice = init_realTokenPrice;
-        _isActive = true;
     }
     
     function getExpirationPeriodDays() public view returns (uint256) {
@@ -340,9 +324,11 @@ contract Mintarama {
     IMNTP _mntpToken;
     MintaramaData _data;
 
-    address _oldControllerAddress;
-
     uint256 constant internal MAGNITUDE = 2**64;
+    
+    bool public isActive = false;
+    bool public isLastControllerVer = true;
+
 
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
     
@@ -380,18 +366,17 @@ contract Mintarama {
     // -> kill the contract
     // -> change the price of tokens
     modifier onlyAdministrator() {
-        require(_data.isAdministrator(msg.sender));
+        require(isCurrentUserAdministrator());
         _;
     }
 
     modifier onlyActive() {
-        require(_data.isActive());
+        require(isActive);
         _;
     }
 
-    function Mintarama(address mntpTokenAddress, address dataContractAddress, address oldControllerAddress, uint64 expirationInDays) public {
+    function Mintarama(address mntpTokenAddress, address dataContractAddress, uint64 expirationInDays) public {
         _mntpToken = IMNTP(mntpTokenAddress);
-        _oldControllerAddress = oldControllerAddress;
         
         _data = dataContractAddress != 0x0 ? MintaramaData(dataContractAddress) : new MintaramaData();
         
@@ -408,15 +393,10 @@ contract Mintarama {
     function removeAdministator(address addr) onlyAdministrator public {
         _data.removeAdministator(addr);
     }
-    
-    function setTotalSupply(uint256 val) onlyAdministrator public {
-        uint256 tokenAmount = _mntpToken.balanceOf(address(this));
         
-        require(_data.getTotalSupply() == 0 && tokenAmount == val);
-
-        _data.setTotalSupply(val);
+    function setActive(bool val) onlyAdministrator public {
+        isActive = val;
     }
-
     
     function finish() onlyAdministrator public {
         require(uint(now) >= _data.getExpirationPeriodDays());
@@ -424,7 +404,7 @@ contract Mintarama {
         _mntpToken.transfer(msg.sender, getRemainingTokenAmount());   
         msg.sender.transfer(getTotalEthBalance());
         
-        _data.setActive(false);
+        isActive = false;
     }
 
     /**
@@ -457,11 +437,14 @@ contract Mintarama {
         return ethAmount;
     }   
 
+
     /**
      * Fallback function to handle ethereum that was send straight to the contract
      */
-    function() onlyActive public payable {
-        if (msg.sender != _oldControllerAddress) purchaseTokens(msg.value, 0x0);
+    function() payable public {
+        require(isLastControllerVer);
+
+        if (isActive) purchaseTokens(msg.value, 0x0);
     }
 
     /**
@@ -512,6 +495,9 @@ contract Mintarama {
     //set new controller address in case of some mistake in the contract and transfer there all the tokens and eth.
     function setNewControllerContractAddress(address addr) onlyAdministrator public {
         require(addr != 0x0);
+
+        isActive = false;
+        isLastControllerVer = false;
 
         _data.setNewControllerAddress(addr);
 
@@ -574,10 +560,6 @@ contract Mintarama {
         _data.setMinRefTokenAmount(val);
     }
 
-    function switchActive() onlyAdministrator public {
-        _data.switchActive();
-    }
-
     function setTotalIncomeFeePercent(uint256 val) onlyAdministrator public {
         _data.setTotalIncomeFeePercent(val);
     }
@@ -619,7 +601,7 @@ contract Mintarama {
     }
 
     function getTotalTokenSold() public view returns(uint256) {
-        return _data.getTotalSupply() - getRemainingTokenAmount();
+        return getTotalTokenSupply() - getRemainingTokenAmount();
     }
 
     function getLocalTokenBalance(address userAddress) public view returns(uint256) {
@@ -741,6 +723,7 @@ contract Mintarama {
     // INTERNAL FUNCTIONS
     
     function purchaseTokens(uint256 ethAmount, address refAddress) internal returns(uint256) {
+        if (getTotalTokenSupply() == 0) setTotalSupply();
 
         uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
         (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount);
@@ -768,6 +751,14 @@ contract Mintarama {
         onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
         return tokenAmount;
+    }
+
+    function setTotalSupply() internal {
+        require(_data.getTotalSupply() == 0);
+
+        uint256 tokenAmount = _mntpToken.balanceOf(address(this));
+
+        _data.setTotalSupply(tokenAmount);
     }
 
     function getRewardAndPrepareWithdraw() internal returns(uint256) {
@@ -1434,49 +1425,6 @@ library RealMath {
      */
     function sqrt(int128 real_arg) internal pure returns (int128) {
         return pow(real_arg, REAL_HALF);
-    }
-    
-    /**
-     * Compute the sin of a number to a certain number of Taylor series terms.
-     */
-    function sinLimited(int128 real_arg, int64 max_iterations) internal pure returns (int128) {
-        // First bring the number into 0 to 2 pi
-        // TODO: This will introduce an error for very large numbers, because the error in our Pi will compound.
-        // But for actual reasonable angle values we should be fine.
-        real_arg = real_arg % REAL_TWO_PI;
-        
-        int128 accumulator = REAL_ONE;
-        
-        // We sum from large to small iteration so that we can have higher powers in later terms
-        for (int64 iteration = max_iterations - 1; iteration >= 0; iteration--) {
-            accumulator = REAL_ONE - mul(div(mul(real_arg, real_arg), toReal((2 * iteration + 2) * (2 * iteration + 3))), accumulator);
-            // We can't stop early; we need to make it to the first term.
-        }
-        
-        return mul(real_arg, accumulator);
-    }
-    
-    /**
-     * Calculate sin(x) with a sensible maximum iteration count to wait until
-     * convergence.
-     */
-    function sin(int128 real_arg) internal pure returns (int128) {
-        return sinLimited(real_arg, 15);
-    }
-    
-    /**
-     * Calculate cos(x).
-     */
-    function cos(int128 real_arg) internal pure returns (int128) {
-        return sin(real_arg + REAL_HALF_PI);
-    }
-    
-    /**
-     * Calculate tan(x). May overflow for large results. May throw if tan(x)
-     * would be infinite, or return an approximation, or overflow.
-     */
-    function tan(int128 real_arg) internal pure returns (int128) {
-        return div(sin(real_arg), cos(real_arg));
     }
      
 }
