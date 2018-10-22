@@ -63,6 +63,10 @@ contract MintaramaData {
         _controllerAddress = newAddress;
     }
 
+    function getControllerAddress() public view returns(address) {
+        return _controllerAddress;
+    }
+
         
     function getTokenInitialPrice() public pure returns(uint256) {
         return TOKEN_PRICE_INITIAL;
@@ -325,9 +329,11 @@ contract Mintarama {
     MintaramaData _data;
 
     uint256 constant internal MAGNITUDE = 2**64;
+
     
     bool public isActive = false;
-    bool public isLastControllerVer = true;
+    bool public isMigrationToNewControllerInProgress = false;
+
 
 
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
@@ -347,7 +353,7 @@ contract Mintarama {
 
     // only people with tokens
     modifier onlyContractUsers() {
-        require(getLocalTokenBalance(msg.sender) > 0);
+        require(getUserLocalTokenBalance(msg.sender) > 0);
         _;
     }
     
@@ -419,7 +425,7 @@ contract Mintarama {
      */
     function sell(uint256 tokenAmount) onlyActive onlyContractUsers public returns(uint256) {
         
-        if (tokenAmount > getUserLocalTokenBalance() || tokenAmount == 0) return;
+        if (tokenAmount > getCurrentUserLocalTokenBalance() || tokenAmount == 0) return;
 
         uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
         (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount);
@@ -441,10 +447,8 @@ contract Mintarama {
     /**
      * Fallback function to handle ethereum that was send straight to the contract
      */
-    function() payable public {
-        require(isLastControllerVer);
-
-        if (isActive) purchaseTokens(msg.value, 0x0);
+    function() onlyActive payable public {
+        purchaseTokens(msg.value, 0x0);
     }
 
     /**
@@ -479,6 +483,14 @@ contract Mintarama {
 
         onWithdrawDevReward(to, getDevReward());
     }
+
+    function setMigrationStatus(bool inProgress) onlyAdministrator public {
+        isMigrationToNewControllerInProgress = inProgress;
+    }
+
+    function activateNewController() payable public {
+        require(isMigrationToNewControllerInProgress);
+    }
     
 
     /* HELPERS */  
@@ -493,19 +505,19 @@ contract Mintarama {
     }
     
     //set new controller address in case of some mistake in the contract and transfer there all the tokens and eth.
-    function setNewControllerContractAddress(address addr) onlyAdministrator public {
-        require(addr != 0x0);
+    function setNewControllerContractAddress(address newControllerAddr) onlyAdministrator public {
+        require(newControllerAddr != 0x0);
 
         isActive = false;
-        isLastControllerVer = false;
 
-        _data.setNewControllerAddress(addr);
+        Mintarama newController = Mintarama(newControllerAddr);
+        _data.setNewControllerAddress(newControllerAddr);
 
         uint256 remainingTokenAmount = getRemainingTokenAmount();
         uint256 ethBalance = getTotalEthBalance();
 
-        if (remainingTokenAmount > 0) _mntpToken.transfer(addr, remainingTokenAmount); 
-        if (ethBalance > 0) addr.transfer(ethBalance);
+        if (remainingTokenAmount > 0) _mntpToken.transfer(newControllerAddr, remainingTokenAmount); 
+        if (ethBalance > 0) newController.activateNewController.value(ethBalance)();
     }
 
     function getTokenInitialPrice() public view returns(uint256) {
@@ -604,16 +616,16 @@ contract Mintarama {
         return getTotalTokenSupply() - getRemainingTokenAmount();
     }
 
-    function getLocalTokenBalance(address userAddress) public view returns(uint256) {
+    function getUserLocalTokenBalance(address userAddress) public view returns(uint256) {
         return _data.getUserTokenBalance(userAddress);
     }
     
-    function getUserLocalTokenBalance() public view returns(uint256) {
-        return getLocalTokenBalance(msg.sender);
+    function getCurrentUserLocalTokenBalance() public view returns(uint256) {
+        return getUserLocalTokenBalance(msg.sender);
     }    
 
     function isRefAvailable(address refAddress) public view returns(bool) {
-        return getLocalTokenBalance(refAddress) >= _data.getMinRefTokenAmount();
+        return getUserLocalTokenBalance(refAddress) >= _data.getMinRefTokenAmount();
     }
 
     function isCurrentUserRefAvailable() public view returns(bool) {
@@ -621,16 +633,19 @@ contract Mintarama {
     }
 
     function getCurrentUserReward(bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
-        uint256 reward = _data.getBonusPerMntp() * _data.getUserTokenBalance(msg.sender);
-        reward = ((reward < _data.getUserRewardPayouts(msg.sender)) ? 0 : SafeMath.sub(reward, _data.getUserRewardPayouts(msg.sender))) / MAGNITUDE;
+        return getUserReward(msg.sender, incRefBonus, incPromoBonus);
+    }
+
+    function getUserReward(address addr, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
+        uint256 reward = _data.getBonusPerMntp() * _data.getUserTokenBalance(addr);
+        reward = ((reward < _data.getUserRewardPayouts(addr)) ? 0 : SafeMath.sub(reward, _data.getUserRewardPayouts(addr))) / MAGNITUDE;
         
-        if (incRefBonus) reward = SafeMath.add(reward, _data.getUserRefBalance(msg.sender));
-        if (incPromoBonus) reward = SafeMath.add(reward, _data.getUserPromoBonus(msg.sender));
+        if (incRefBonus) reward = SafeMath.add(reward, _data.getUserRefBalance(addr));
+        if (incPromoBonus) reward = SafeMath.add(reward, _data.getUserPromoBonus(addr));
         
         return reward;
     }
   
-
     function get1TokenSellPrice() public view returns(uint256) {
         uint256 tokenAmount = 1 ether;
 
@@ -683,7 +698,7 @@ contract Mintarama {
     }
 
     function getUserMaxPurchase(address userAddress) public view returns(uint256) {
-        return _mntpToken.balanceOf(userAddress) - getLocalTokenBalance(userAddress);
+        return _mntpToken.balanceOf(userAddress) - getUserLocalTokenBalance(userAddress);
     }
     
     function getCurrentUserMaxPurchase() public view returns(uint256) {
@@ -694,11 +709,11 @@ contract Mintarama {
         return _data.getDevReward();
     }
 
-    function getPromoBonus() public view returns(uint256) {
+    function getCurrentUserPromoBonus() public view returns(uint256) {
         return _data.getUserPromoBonus(msg.sender);
     }
 
-    function getRefBonus() public view returns(uint256) {
+    function getCurrentUserRefBonus() public view returns(uint256) {
         return _data.getUserRefBalance(msg.sender);
     }
    
