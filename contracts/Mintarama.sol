@@ -664,7 +664,7 @@ contract Mintarama {
         return SafeMath.div(ethAmount * 1 ether, tokenAmount);
     }
 
-    function calculateReward(uint256 tokenAmount) public view returns(uint256) {
+    function calcReward(uint256 tokenAmount) public view returns(uint256) {
         return (uint256) ((int256)(_data.getBonusPerMntp() * tokenAmount)) / MAGNITUDE;
     }  
 
@@ -683,8 +683,12 @@ contract Mintarama {
 
         return (tokenAmount, totalFeeEth, tokenPrice);
     }
-    
 
+    function estimateBuyOrderFromTokens(uint256 tokenAmount) public view returns(uint256, uint256, uint256) {
+        uint256 ethAmount = tokensToEth(tokenAmount, false, false);
+        require(ethAmount > 0);
+    }
+    
     function estimateSellOrder(uint256 tokenAmount) public view returns(uint256, uint256, uint256) {
         uint256 ethAmount = tokensToEth(tokenAmount, false, false);
         require(ethAmount > 0);
@@ -698,7 +702,7 @@ contract Mintarama {
     }
 
     function getUserMaxPurchase(address userAddress) public view returns(uint256) {
-        return _mntpToken.balanceOf(userAddress) - getUserLocalTokenBalance(userAddress);
+        return _mntpToken.balanceOf(userAddress) - SafeMath.mul(getUserLocalTokenBalance(userAddress), 2);
     }
     
     function getCurrentUserMaxPurchase() public view returns(uint256) {
@@ -750,14 +754,12 @@ contract Mintarama {
 
         if (refAddress == msg.sender || !isRefAvailable(refAddress)) refAddress = 0x0;
 
-        uint256 userRewardBefore = getCurrentUserReward(false, false);
-
         distributeFee(totalFeeEth, refAddress);
-        
+
         addUserTokens(msg.sender, tokenAmount);
 
         // the user is not going to receive any reward for the current purchase
-        _data.addUserRewardPayouts(msg.sender, SafeMath.sub(getCurrentUserReward(false, false), userRewardBefore) * MAGNITUDE);
+        _data.addUserRewardPayouts(msg.sender, _data.getBonusPerMntp() * tokenAmount);
 
         checkAndSendPromoBonus(tokenAmount);
         
