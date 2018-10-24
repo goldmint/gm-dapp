@@ -207,29 +207,37 @@ describe('MINTARAMA', function() {
         await mraContract.setActive(true, { from: creator });
     });
 
-
     it('test estimations', async() => {
         var val = 1000;
-        var estBuy = await mraContract.estimateBuyOrder(val * ether);
+        var estBuy = await mraContract.estimateBuyOrder(val * ether, true);
         console.log("est buy " + val + " ether. Receive " + bignumToFloat(estBuy[0]) + " tokens by price " + bignumToFloat(estBuy[2]) + " eth/token");
 
         var val = 0.001;
-        var estBuy = await mraContract.estimateBuyOrder(val * ether);
+        var estBuy = await mraContract.estimateBuyOrder(val * ether, true);
         console.log("est buy " + val + " ether: Receive " + bignumToFloat(estBuy[0]) + " tokens by price " + bignumToFloat(estBuy[2]) + " eth/token");
 
         var val = 0.001;
-        var estSell = await mraContract.estimateSellOrder(val * ether);
+        var estSell = await mraContract.estimateSellOrder(val * ether, true);
         console.log("est sell " + val + " token: Receive " + bignumToFloat(estSell[0]) + " eth by price " + bignumToFloat(estSell[2]) + " eth/token");
 
         var val = 50000;
-        var estSell = await mraContract.estimateSellOrder(val * ether);
+        var estSell = await mraContract.estimateSellOrder(val * ether, true);
         console.log("est sell " + val + " token: Receive " + bignumToFloat(estSell[0]) + " eth by price " + bignumToFloat(estSell[2]) + " eth/token");
 
         var val = 3.4273468451;
-        var estSell = await mraContract.estimateSellOrder(3427346845117352400);
+        var estSell = await mraContract.estimateSellOrder(val * ether, true);
         console.log("est sell " + val + " token: Receive " + bignumToFloat(estSell[0]) + " eth by price " + bignumToFloat(estSell[2]) + " eth/token");
 
+        var val = 1000;
+        var estBuy = await mraContract.estimateBuyOrder(val * ether, false);
+        console.log("est buy " + val + " token: Should pay " + bignumToFloat(estBuy[0]) + " eth by price " + bignumToFloat(estBuy[2]) + " eth/token");
+
+        var val = 200;
+        var estSell = await mraContract.estimateSellOrder(val * ether, false);
+        console.log("est sell for " + val + " ether: Receive " + bignumToFloat(estSell[0]) + " tokens by price " + bignumToFloat(estSell[2]) + " eth/token");
+
     });  
+
 
     it('should make a purchase behalf buyer1 1', async() => {
         {
@@ -244,7 +252,7 @@ describe('MINTARAMA', function() {
             var userReward1 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
 
 
-            var est = await mraContract.estimateBuyOrder(ethAmount);
+            var est = await mraContract.estimateBuyOrder(ethAmount, true);
             var estimateTokenAmount = est[0]; 
             var totalPurchaseFee = est[1];
 
@@ -310,7 +318,7 @@ describe('MINTARAMA', function() {
             var userReward1 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
 
 
-            var est = await mraContract.estimateBuyOrder(ethAmount);
+            var est = await mraContract.estimateBuyOrder(ethAmount, true);
             var estimateTokenAmount = est[0]; 
             var totalPurchaseFee = est[1];
 
@@ -380,7 +388,7 @@ describe('MINTARAMA', function() {
 
 
             var userReward1 = await mraContract.getCurrentUserReward(true, false, { from: buyer1 });
-            var buyEst = await mraContract.estimateBuyOrder(ethAmount);
+            var buyEst = await mraContract.estimateBuyOrder(ethAmount, true);
 
             var estimateTokenAmount = buyEst[0];
             var totalPurchaseFee = buyEst[1];
@@ -443,7 +451,7 @@ describe('MINTARAMA', function() {
         //purchase with a ref
         {
             var buyer1TokenBalance = await mraContract.getUserLocalTokenBalance(buyer1);
-            var buyEst = await mraContract.estimateBuyOrder(ethAmount);
+            var buyEst = await mraContract.estimateBuyOrder(ethAmount, true);
             var estimateTokenAmount = buyEst[0];
             var totalPurchaseFee = buyEst[1];
 
@@ -482,7 +490,7 @@ describe('MINTARAMA', function() {
     it('should not make a purchase behalf buyer3',  function(done) {
 
         var ethAmount = 2.5 * ether;
-        mraContract.estimateBuyOrder(ethAmount, function(err, est) {
+        mraContract.estimateBuyOrder(ethAmount, true, function(err, est) {
 
             var estimateTokenAmount = est[0]; 
             
@@ -506,7 +514,7 @@ describe('MINTARAMA', function() {
 
         var ethAmount = 2.5 * ether;
 
-        var est = await mraContract.estimateBuyOrder(ethAmount);
+        var est = await mraContract.estimateBuyOrder(ethAmount, true);
         var estimateTokenAmount = est[0]; 
 
         await mntContract.issueTokens(buyer3, estimateTokenAmount, { from: creator, gas: 2900000 });
@@ -571,7 +579,7 @@ describe('MINTARAMA', function() {
 
             var mntpContrantPowhBalance1 = mntContract.balanceOf(mraContractAddress);
 
-            var sellEst = await mraContract.estimateSellOrder(tokenAmount);             
+            var sellEst = await mraContract.estimateSellOrder(tokenAmount, true);             
             var estimatedEthAmount = sellEst[0];
             var estimatedTotalFee = sellEst[1];
             //console.log("estimatedEthAmount: " + estimatedEthAmount.toString(10) + "; estimatedTotalFee: " + estimatedTotalFee.toString(10) + "; shareFeePercent: " + shareFeePercent);
@@ -683,7 +691,7 @@ describe('MINTARAMA', function() {
 
                 assert(promoBonus.sub(promoBonus1) == 0);
 
-                var est = await mraContract.estimateBuyOrder(ethAmount);
+                var est = await mraContract.estimateBuyOrder(ethAmount, true);
                 var estimateTokenAmount = est[0]; 
                 //console.log("buy est: " + est);
 
@@ -710,7 +718,7 @@ describe('MINTARAMA', function() {
         // should win if a purchase is enough
         {
             var ethAmount = 2 * ether;
-            var est = await mraContract.estimateBuyOrder(ethAmount);
+            var est = await mraContract.estimateBuyOrder(ethAmount, true);
             var estimateTokenAmount = est[0]; 
             await updateBlockNum();
 
@@ -767,7 +775,7 @@ describe('MINTARAMA', function() {
     it('should reinvest reward', async() => {
 
         var ethAmount = 1 * ether;
-        var est = await mraContract.estimateBuyOrder(ethAmount);
+        var est = await mraContract.estimateBuyOrder(ethAmount, true);
         var estimateTokenAmount = est[0];
         
 
@@ -786,7 +794,7 @@ describe('MINTARAMA', function() {
         assert(buyer1Reward1 > 0);
 
         
-        var est = await mraContract.estimateBuyOrder(buyer1Reward1);
+        var est = await mraContract.estimateBuyOrder(buyer1Reward1, true);
         var estimateTokenAmount = est[0];
         var totalPurchaseFee = est[1];
 
@@ -953,7 +961,7 @@ describe('MINTARAMA', function() {
 
                 //console.log("dealNum: " + dealNum + "; buy for " + ethAmount.div(ether) + " eth");
 
-                var est = await mraContract.estimateBuyOrder(ethAmount);
+                var est = await mraContract.estimateBuyOrder(ethAmount, true);
                 var estimateTokenAmount = est[0]; 
                 updateTokenBalance(estimateTokenAmount);
                 expectedTokenPrice = getExpectedTokenPrice();
@@ -971,7 +979,7 @@ describe('MINTARAMA', function() {
                 if (tokenAmount == 0) continue;
                 //console.log("dealNum: " + dealNum + "; sell " + tokenAmount.div(ether) + " tokens");
 
-                var estSell = await mraContract.estimateSellOrder(tokenAmount);
+                var estSell = await mraContract.estimateSellOrder(tokenAmount, true);
                 //console.log("est sell " + tokenAmount.div(ether) + " token: Receive " + bignumToFloat(estSell[0]) + " eth by price " + bignumToFloat(estSell[2]) + " eth/token");
         
                 updateTokenBalance(tokenAmount.mul(-1));
@@ -1000,7 +1008,7 @@ describe('MINTARAMA', function() {
         var expectedTokenPrice = getExpectedTokenPrice();
         assert.equal(expectedTokenPrice.toString(10), startTokenPrice.toString(10));
 
-        var estSell = await mraContract.estimateSellOrder(buyer5TokenBalance);
+        var estSell = await mraContract.estimateSellOrder(buyer5TokenBalance, true);
         //console.log("est sell " + buyer5TokenBalance.div(ether) + " token: Receive " + bignumToFloat(estSell[0]) + " eth by price " + bignumToFloat(estSell[2]) + " eth/token");
 
         await mntContract.approve(mraContractAddress, buyer5TokenBalance, { from: buyer5, gas: 2900000});
@@ -1013,6 +1021,8 @@ describe('MINTARAMA', function() {
     });
 
 });
+
+
 
 describe('MINTARAMA NEW CONTROLLER', function(){
 

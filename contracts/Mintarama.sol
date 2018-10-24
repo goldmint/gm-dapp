@@ -428,7 +428,7 @@ contract Mintarama {
         if (tokenAmount > getCurrentUserLocalTokenBalance() || tokenAmount == 0) return;
 
         uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
-        (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount);
+        (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount, true);
 
         subUserTokens(msg.sender, tokenAmount);
 
@@ -650,7 +650,7 @@ contract Mintarama {
         uint256 tokenAmount = 1 ether;
 
         uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
-        (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount);
+        (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount, true);
 
         return ethAmount;
     }
@@ -659,7 +659,7 @@ contract Mintarama {
         uint256 ethAmount = 1 ether;
 
         uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
-        (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount);  
+        (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount, true);  
 
         return SafeMath.div(ethAmount * 1 ether, tokenAmount);
     }
@@ -668,8 +668,12 @@ contract Mintarama {
         return (uint256) ((int256)(_data.getBonusPerMntp() * tokenAmount)) / MAGNITUDE;
     }  
 
+    function estimateBuyOrder(uint256 amount, bool fromEth) public view returns(uint256, uint256, uint256) {
+        require(amount > 0);
 
-    function estimateBuyOrder(uint256 ethAmount) public view returns(uint256, uint256, uint256) {
+        uint256 ethAmount = fromEth ? amount : tokensToEth(amount, true, false);
+        require(ethAmount > 0);
+
         uint256 totalTokenFee = calcPercent(ethToTokens(ethAmount, true, true) - ethToTokens(ethAmount, true, false), _data.getTotalIncomeFeePercent());
         require(totalTokenFee > 0);
 
@@ -681,15 +685,14 @@ contract Mintarama {
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
 
-        return (tokenAmount, totalFeeEth, tokenPrice);
-    }
-
-    function estimateBuyOrderFromTokens(uint256 tokenAmount) public view returns(uint256, uint256, uint256) {
-        uint256 ethAmount = tokensToEth(tokenAmount, false, false);
-        require(ethAmount > 0);
+        return (fromEth ? tokenAmount : ethAmount, totalFeeEth, tokenPrice);
     }
     
-    function estimateSellOrder(uint256 tokenAmount) public view returns(uint256, uint256, uint256) {
+    function estimateSellOrder(uint256 amount, bool fromToken) public view returns(uint256, uint256, uint256) {
+        require(amount > 0);
+
+        uint256 tokenAmount = fromToken ? amount : ethToTokens(amount, false, false);
+
         uint256 ethAmount = tokensToEth(tokenAmount, false, false);
         require(ethAmount > 0);
 
@@ -698,8 +701,9 @@ contract Mintarama {
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
 
-        return (ethAmount, totalFeeEth, tokenPrice);
+        return (fromToken ? ethAmount : tokenAmount, totalFeeEth, tokenPrice);
     }
+
 
     function getUserMaxPurchase(address userAddress) public view returns(uint256) {
         return _mntpToken.balanceOf(userAddress) - SafeMath.mul(getUserLocalTokenBalance(userAddress), 2);
@@ -745,7 +749,7 @@ contract Mintarama {
         if (getTotalTokenSupply() == 0) setTotalSupply();
 
         uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
-        (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount);
+        (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount, true);
 
         //user has to have at least equal amount of tokens which he's willing to buy 
         require(getCurrentUserMaxPurchase() >= tokenAmount);
