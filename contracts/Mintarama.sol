@@ -401,6 +401,7 @@ contract Mintarama {
     }
         
     function setActive(bool val) onlyAdministrator public {
+        require(isActive != val);
         isActive = val;
     }
     
@@ -466,7 +467,6 @@ contract Mintarama {
      * Withdraws all of the callers earnings.
      */
     function withdraw() onlyActive onlyRewardOwners public {
-
         uint256 reward = getRewardAndPrepareWithdraw();
         
         msg.sender.transfer(reward);
@@ -484,8 +484,9 @@ contract Mintarama {
         onWithdrawDevReward(to, getDevReward());
     }
 
-    function setMigrationStatus(bool inProgress) onlyAdministrator public {
-        isMigrationToNewControllerInProgress = inProgress;
+    function setMigrationStatus(bool val) onlyAdministrator public {
+        require(isMigrationToNewControllerInProgress != val);
+        isMigrationToNewControllerInProgress = val;
     }
 
     function activateNewController() payable public {
