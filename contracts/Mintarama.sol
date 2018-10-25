@@ -66,7 +66,6 @@ contract MintaramaData {
     function getControllerAddress() public view returns(address) {
         return _controllerAddress;
     }
-
         
     function getTokenInitialPrice() public pure returns(uint256) {
         return TOKEN_PRICE_INITIAL;
@@ -504,6 +503,11 @@ contract Mintarama {
     function getDataContractAddress() public view returns(address) {
         return address(_data);
     }
+
+    function getTokenAddress() public view returns(address) {
+        return address(_mntpToken);
+    }
+
     
     //set new controller address in case of some mistake in the contract and transfer there all the tokens and eth.
     function setNewControllerContractAddress(address newControllerAddr) onlyAdministrator public {
