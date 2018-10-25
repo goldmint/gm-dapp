@@ -324,7 +324,7 @@ contract MintaramaData {
 
 contract Mintarama {
 
-    IMNTP _mntpToken;
+    IMNTP _token;
     MintaramaData _data;
 
     uint256 constant internal MAGNITUDE = 2**64;
@@ -381,7 +381,7 @@ contract Mintarama {
     }
 
     function Mintarama(address mntpTokenAddress, address dataContractAddress, uint64 expirationInDays) public {
-        _mntpToken = IMNTP(mntpTokenAddress);
+        _token = IMNTP(mntpTokenAddress);
         
         _data = dataContractAddress != 0x0 ? MintaramaData(dataContractAddress) : new MintaramaData();
         
@@ -407,7 +407,7 @@ contract Mintarama {
     function finish() onlyAdministrator public {
         require(uint(now) >= _data.getExpirationPeriodDays());
         
-        _mntpToken.transfer(msg.sender, getRemainingTokenAmount());   
+        _token.transfer(msg.sender, getRemainingTokenAmount());   
         msg.sender.transfer(getTotalEthBalance());
         
         isActive = false;
@@ -505,7 +505,7 @@ contract Mintarama {
     }
 
     function getTokenAddress() public view returns(address) {
-        return address(_mntpToken);
+        return address(_token);
     }
 
     
@@ -521,7 +521,7 @@ contract Mintarama {
         uint256 remainingTokenAmount = getRemainingTokenAmount();
         uint256 ethBalance = getTotalEthBalance();
 
-        if (remainingTokenAmount > 0) _mntpToken.transfer(newControllerAddr, remainingTokenAmount); 
+        if (remainingTokenAmount > 0) _token.transfer(newControllerAddr, remainingTokenAmount); 
         if (ethBalance > 0) newController.activateNewController.value(ethBalance)();
     }
 
@@ -614,7 +614,7 @@ contract Mintarama {
     }
 
     function getRemainingTokenAmount() public view returns(uint256) {
-        return _mntpToken.balanceOf(address(this));
+        return _token.balanceOf(address(this));
     }
 
     function getTotalTokenSold() public view returns(uint256) {
@@ -711,7 +711,7 @@ contract Mintarama {
 
 
     function getUserMaxPurchase(address userAddress) public view returns(uint256) {
-        return _mntpToken.balanceOf(userAddress) - SafeMath.mul(getUserLocalTokenBalance(userAddress), 2);
+        return _token.balanceOf(userAddress) - SafeMath.mul(getUserLocalTokenBalance(userAddress), 2);
     }
     
     function getCurrentUserMaxPurchase() public view returns(uint256) {
@@ -782,7 +782,7 @@ contract Mintarama {
     function setTotalSupply() internal {
         require(_data.getTotalSupply() == 0);
 
-        uint256 tokenAmount = _mntpToken.balanceOf(address(this));
+        uint256 tokenAmount = _token.balanceOf(address(this));
 
         _data.setTotalSupply(tokenAmount);
     }
@@ -869,12 +869,12 @@ contract Mintarama {
 
     function addUserTokens(address user, uint256 tokenAmount) internal {
         _data.addUserTokenBalance(user, tokenAmount);
-        _mntpToken.transfer(msg.sender, tokenAmount);   
+        _token.transfer(msg.sender, tokenAmount);   
     }
 
     function subUserTokens(address user, uint256 tokenAmount) internal {
         _data.subUserTokenBalance(user, tokenAmount);
-        _mntpToken.transferFrom(user, address(this), tokenAmount);    
+        _token.transferFrom(user, address(this), tokenAmount);    
     }
 
     function updateTokenPrice(int128 realTokenAmount) internal {
