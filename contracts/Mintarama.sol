@@ -1,6 +1,6 @@
 pragma solidity ^0.4.18;
 
-contract IMNTP {
+contract IStdToken {
     function balanceOf(address _owner) public constant returns (uint256);
     function transfer(address _to, uint256 _value) public returns (bool);
     function transferFrom(address _from, address _to, uint256 _value) public returns(bool);
@@ -324,7 +324,7 @@ contract MintaramaData {
 
 contract Mintarama {
 
-    IMNTP _token;
+    IStdToken _token;
     MintaramaData _data;
 
     uint256 constant internal MAGNITUDE = 2**64;
@@ -381,7 +381,7 @@ contract Mintarama {
     }
 
     function Mintarama(address mntpTokenAddress, address dataContractAddress, uint64 expirationInDays) public {
-        _token = IMNTP(mntpTokenAddress);
+        _token = IStdToken(mntpTokenAddress);
         
         _data = dataContractAddress != 0x0 ? MintaramaData(dataContractAddress) : new MintaramaData();
         
@@ -571,6 +571,14 @@ contract Mintarama {
 
     function setPriceSpeed(uint64 speedPercent, uint64 speedTokenBlock) onlyAdministrator public {
         _data.setPriceSpeed(speedPercent, speedTokenBlock);
+    }
+
+    function getPriceSpeedPercent() public view returns(uint256) {
+        return _data.getPriceSpeedPercent();
+    }
+
+    function getPriceSpeedTokenBlock() public view returns(uint256) {
+        return _data.getPriceSpeedTokenBlock();
     }
 
     function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
