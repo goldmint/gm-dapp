@@ -573,11 +573,11 @@ contract Mintarama {
         _data.setPriceSpeed(speedPercent, speedTokenBlock);
     }
 
-    function getPriceSpeedPercent() public view returns(uint256) {
+    function getPriceSpeedPercent() public view returns(int64) {
         return _data.getPriceSpeedPercent();
     }
 
-    function getPriceSpeedTokenBlock() public view returns(uint256) {
+    function getPriceSpeedTokenBlock() public view returns(int64) {
         return _data.getPriceSpeedTokenBlock();
     }
 
@@ -698,7 +698,8 @@ contract Mintarama {
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
 
-        return (fromEth ? tokenAmount : ethAmount, totalFeeEth, tokenPrice);
+        //we add totalFeeEth/4 to compensate small back calculation rounding error
+        return (fromEth ? tokenAmount : SafeMath.add(ethAmount, SafeMath.div(totalFeeEth, 4)), totalFeeEth, tokenPrice);
     }
     
     function estimateSellOrder(uint256 amount, bool fromToken) public view returns(uint256, uint256, uint256) {
