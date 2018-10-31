@@ -8,7 +8,7 @@ contract IStdToken {
 
 contract MintaramaData {
 
-    uint256 constant private TOKEN_PRICE_INITIAL = 0.01 ether;
+    uint256 constant private TOKEN_PRICE_INITIAL = 0.001 ether;
 
     uint256 private _devRewardPercent = 40 ether;
     uint256 private _mntpRewardPercent = 30 ether;
@@ -139,7 +139,7 @@ contract MintaramaData {
     function getPriceSpeedTokenBlock() public view returns(int64) {
         return _priceSpeedTokenBlock;
     }
-    
+
     
     function addAdministator(address addr) onlyController public {
         _administrators[keccak256(addr)] = true;
@@ -328,12 +328,15 @@ contract Mintarama {
     MintaramaData _data;
 
     uint256 constant internal MAGNITUDE = 2**64;
+    uint256 constant internal MIN_TOKEN_DEAL_VAL = 0.01 ether;
+    uint256 constant internal MAX_TOKEN_DEAL_VAL = 10000 ether;
 
     
     bool public isActive = false;
     bool public isMigrationToNewControllerInProgress = false;
 
-
+    
+    int128 private _tempRealTokenPrice;
 
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
     
@@ -648,6 +651,16 @@ contract Mintarama {
     function getCurrentUserReward(bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
         return getUserReward(msg.sender, incRefBonus, incPromoBonus);
     }
+    
+    function getTokenDealRange() public view returns(uint256, uint256) {
+        return (MIN_TOKEN_DEAL_VAL, MAX_TOKEN_DEAL_VAL);
+    }
+
+    function getEthDealRange() public view returns(uint256, uint256) {
+        uint256 minTokenVal; uint256 maxTokenVal;
+        (minTokenVal, maxTokenVal) = getTokenDealRange();
+        return (tokensToEth(minTokenVal, true, false), tokensToEth(maxTokenVal, true, false));
+    }
 
     function getUserReward(address addr, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
         uint256 reward = _data.getBonusPerMntp() * _data.getUserTokenBalance(addr);
@@ -682,7 +695,10 @@ contract Mintarama {
     }  
 
     function estimateBuyOrder(uint256 amount, bool fromEth) public view returns(uint256, uint256, uint256) {
-        require(amount > 0);
+        uint256 minAmount; uint256 maxAmount;
+        (minAmount, maxAmount) = fromEth ? getEthDealRange() : getTokenDealRange();
+
+        require(amount >= minAmount && amount <= maxAmount);
 
         uint256 ethAmount = fromEth ? amount : tokensToEth(amount, true, false);
         require(ethAmount > 0);
@@ -698,12 +714,15 @@ contract Mintarama {
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
 
-        //we add totalFeeEth/4 to compensate small back calculation rounding error
-        return (fromEth ? tokenAmount : SafeMath.add(ethAmount, SafeMath.div(totalFeeEth, 4)), totalFeeEth, tokenPrice);
+        //we add 25% of total fee to compensate a small back calculation rounding error
+        return (fromEth ? tokenAmount : SafeMath.add(ethAmount, calcPercent(totalFeeEth, 25 ether)), totalFeeEth, tokenPrice);
     }
     
     function estimateSellOrder(uint256 amount, bool fromToken) public view returns(uint256, uint256, uint256) {
-        require(amount > 0);
+        uint256 minAmount; uint256 maxAmount;
+        (minAmount, maxAmount) = fromToken ? getTokenDealRange() : getEthDealRange();
+
+        require(amount >= minAmount && amount <= maxAmount);
 
         uint256 tokenAmount = fromToken ? amount : ethToTokens(amount, false, false);
 
