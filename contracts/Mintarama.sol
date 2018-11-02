@@ -11,7 +11,7 @@ contract MintaramaData {
     uint256 constant private TOKEN_PRICE_INITIAL = 0.001 ether;
 
     uint256 private _devRewardPercent = 40 ether;
-    uint256 private _mntpRewardPercent = 30 ether;
+    uint256 private _shareRewardPercent = 30 ether;
     uint256 private _refBonusPercent = 20 ether;
     uint256 private _bigPromoPercent = 5 ether;
     uint256 private _quickPromoPercent = 5 ether;
@@ -37,7 +37,7 @@ contract MintaramaData {
     uint256 private _initBlockNum;
     uint64 private _initTime;
     uint64 private _expirationPeriodDays;
-    uint256 private _bonusPerMntp;
+    uint256 private _bonusPerShare;
     uint256 private _devReward;
     uint256 private _currentBigPromoBonus;
     uint256 private _currentQuickPromoBonus;
@@ -71,12 +71,12 @@ contract MintaramaData {
         return TOKEN_PRICE_INITIAL;
     }
 
-    function setRewardPercentages(uint256 devRewardPercent, uint256 mntpRewardPercent, uint256 refBonusPercent, uint256 bigPromoPercent, uint256 quickPromoPercent) onlyController public {
+    function setRewardPercentages(uint256 devRewardPercent, uint256 shareRewardPercent, uint256 refBonusPercent, uint256 bigPromoPercent, uint256 quickPromoPercent) onlyController public {
         require(devRewardPercent <= 40 ether);
-        require(devRewardPercent + mntpRewardPercent + refBonusPercent + bigPromoPercent + quickPromoPercent == 100 ether);
+        require(devRewardPercent + shareRewardPercent + refBonusPercent + bigPromoPercent + quickPromoPercent == 100 ether);
 
         _devRewardPercent = devRewardPercent;
-        _mntpRewardPercent = mntpRewardPercent;
+        _shareRewardPercent = shareRewardPercent;
         _refBonusPercent = refBonusPercent;
         _bigPromoPercent = bigPromoPercent;
         _quickPromoPercent = quickPromoPercent;
@@ -86,8 +86,8 @@ contract MintaramaData {
         return _devRewardPercent;
     }
     
-    function getMntpRewardPercent() public view returns(uint256) {
-        return _mntpRewardPercent;
+    function getShareRewardPercent() public view returns(uint256) {
+        return _shareRewardPercent;
     }
     
     function getRefBonusPercent() public view returns(uint256) {
@@ -238,18 +238,13 @@ contract MintaramaData {
     function getInitBlockNum() public view returns (uint256) {
         return _initBlockNum;
     }
-
-
-    function setBonusPerMntp(uint256 val) onlyController public {
-        _bonusPerMntp = val;
-    }
     
-    function addBonusPerMntp(uint256 val) onlyController public {
-        _bonusPerMntp = SafeMath.add(_bonusPerMntp, val);
+    function addBonusPerShare(uint256 val) onlyController public {
+        _bonusPerShare = SafeMath.add(_bonusPerShare, val);
     }    
     
-    function getBonusPerMntp() public view returns (uint256) {
-        return _bonusPerMntp;
+    function getBonusPerShare() public view returns (uint256) {
+        return _bonusPerShare;
     }
 
     function setDevReward(uint256 val) onlyController public {
@@ -387,8 +382,8 @@ contract Mintarama {
         _;
     }
 
-    function Mintarama(address mntpTokenAddress, address dataContractAddress, uint64 expirationInDays) public {
-        _token = IStdToken(mntpTokenAddress);
+    function Mintarama(address erc20TokenAddress, address dataContractAddress, uint64 expirationInDays) public {
+        _token = IStdToken(erc20TokenAddress);
         
         _data = dataContractAddress != 0x0 ? MintaramaData(dataContractAddress) : new MintaramaData();
         
@@ -539,8 +534,8 @@ contract Mintarama {
         return _data.getDevRewardPercent();
     }
     
-    function getMntpRewardPercent() public view returns(uint256) {
-        return _data.getMntpRewardPercent();
+    function getShareRewardPercent() public view returns(uint256) {
+        return _data.getShareRewardPercent();
     }
     
     function getRefBonusPercent() public view returns(uint256) {
@@ -664,7 +659,7 @@ contract Mintarama {
     }
 
     function getUserReward(address addr, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
-        uint256 reward = _data.getBonusPerMntp() * _data.getUserTokenBalance(addr);
+        uint256 reward = _data.getBonusPerShare() * _data.getUserTokenBalance(addr);
         reward = ((reward < _data.getUserRewardPayouts(addr)) ? 0 : SafeMath.sub(reward, _data.getUserRewardPayouts(addr))) / MAGNITUDE;
         
         if (incRefBonus) reward = SafeMath.add(reward, _data.getUserRefBalance(addr));
@@ -692,7 +687,7 @@ contract Mintarama {
     }
 
     function calcReward(uint256 tokenAmount) public view returns(uint256) {
-        return (uint256) ((int256)(_data.getBonusPerMntp() * tokenAmount)) / MAGNITUDE;
+        return (uint256) ((int256)(_data.getBonusPerShare() * tokenAmount)) / MAGNITUDE;
     }  
 
     function estimateBuyOrder(uint256 amount, bool fromEth) public view returns(uint256, uint256, uint256) {
@@ -794,7 +789,7 @@ contract Mintarama {
         addUserTokens(msg.sender, tokenAmount);
 
         // the user is not going to receive any reward for the current purchase
-        _data.addUserRewardPayouts(msg.sender, _data.getBonusPerMntp() * tokenAmount);
+        _data.addUserRewardPayouts(msg.sender, _data.getBonusPerShare() * tokenAmount);
 
         checkAndSendPromoBonus(tokenAmount);
         
@@ -873,7 +868,7 @@ contract Mintarama {
         if (getTotalTokenSold() == 0) {
             _data.addDevReward(totalShareReward);
         } else {
-            _data.addBonusPerMntp((totalShareReward * MAGNITUDE) / getTotalTokenSold());
+            _data.addBonusPerShare((totalShareReward * MAGNITUDE) / getTotalTokenSold());
         }
     }
 
@@ -956,7 +951,7 @@ contract Mintarama {
 
 
     function calcTotalShareRewardFee(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data.getMntpRewardPercent());
+        return calcPercent(totalFee, _data.getShareRewardPercent());
     }
     
     function calcRefBonus(uint256 totalFee) internal view returns(uint256) {

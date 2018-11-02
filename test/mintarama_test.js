@@ -185,7 +185,7 @@ describe('MINTARAMA', function() {
     });
 
     it('init vars', async() => {
-        shareFeePercent = await mraContract.getMntpRewardPercent().div(1e18);    
+        shareFeePercent = await mraContract.getShareRewardPercent().div(1e18);    
         refFeePercent = await mraContract.getRefBonusPercent().div(1e18);
 
         var priceSpeedPercent = await mraContract.getPriceSpeedPercent();
@@ -280,7 +280,7 @@ describe('MINTARAMA', function() {
         //assert(Math.abs(delta) < 0.002 * val);
         */
     });  
-return;
+
     it('should make a purchase behalf buyer1 1', async() => {
         {
             var ethAmount = 2 * ether;
