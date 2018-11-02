@@ -615,10 +615,6 @@ contract Mintarama {
         return convertRealTo256(_data.getRealTokenPrice());
     }
 
-    function getRealCurrentTokenPrice() public view returns(int128) {
-        return _data.getRealTokenPrice();
-    }
-
     function getTotalEthBalance() public view returns(uint256) {
         return this.balance;
     }
@@ -954,7 +950,7 @@ contract Mintarama {
         return RealMath.mul(_data.getRealTokenPrice(), RealMath.exp(expArg));
     }
     
-    function getRealPriceSpeed() public view returns(int128) {
+    function getRealPriceSpeed() internal view returns(int128) {
         return RealMath.div(RealMath.fraction(_data.getPriceSpeedPercent(), 100), RealMath.toReal(_data.getPriceSpeedTokenBlock()));
     }
 
