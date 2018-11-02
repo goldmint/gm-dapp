@@ -328,8 +328,12 @@ contract Mintarama {
     MintaramaData _data;
 
     uint256 constant internal MAGNITUDE = 2**64;
-    uint256 constant internal MIN_TOKEN_DEAL_VAL = 0.01 ether;
-    uint256 constant internal MAX_TOKEN_DEAL_VAL = 10000 ether;
+
+    uint256 constant internal MIN_TOKEN_DEAL_VAL = 0.1 ether;
+    uint256 constant internal MAX_TOKEN_DEAL_VAL = 1000000 ether;
+
+    uint256 constant internal MIN_ETH_DEAL_VAL = 0.001 ether;
+    uint256 constant internal MAX_ETH_DEAL_VAL = 200000 ether;
 
     
     bool public isActive = false;
@@ -427,7 +431,6 @@ contract Mintarama {
      * sell tokens for eth
      */
     function sell(uint256 tokenAmount) onlyActive onlyContractUsers public returns(uint256) {
-        
         if (tokenAmount > getCurrentUserLocalTokenBalance() || tokenAmount == 0) return;
 
         uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
@@ -659,7 +662,9 @@ contract Mintarama {
     function getEthDealRange() public view returns(uint256, uint256) {
         uint256 minTokenVal; uint256 maxTokenVal;
         (minTokenVal, maxTokenVal) = getTokenDealRange();
-        return (tokensToEth(minTokenVal, true, false), tokensToEth(maxTokenVal, true, false));
+        
+        //maybe  tokensToEth(maxTokenVal, false, false)
+        return ( SafeMath.max(MIN_ETH_DEAL_VAL, tokensToEth(minTokenVal, true, false)), SafeMath.min(MAX_ETH_DEAL_VAL, tokensToEth(maxTokenVal, true, false)) );
     }
 
     function getUserReward(address addr, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
@@ -697,7 +702,6 @@ contract Mintarama {
     function estimateBuyOrder(uint256 amount, bool fromEth) public view returns(uint256, uint256, uint256) {
         uint256 minAmount; uint256 maxAmount;
         (minAmount, maxAmount) = fromEth ? getEthDealRange() : getTokenDealRange();
-
         require(amount >= minAmount && amount <= maxAmount);
 
         uint256 ethAmount = fromEth ? amount : tokensToEth(amount, true, false);
@@ -714,14 +718,12 @@ contract Mintarama {
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
 
-        //we add 25% of total fee to compensate a small back calculation rounding error
-        return (fromEth ? tokenAmount : SafeMath.add(ethAmount, calcPercent(totalFeeEth, 25 ether)), totalFeeEth, tokenPrice);
+        return (fromEth ? tokenAmount : ethAmount, totalFeeEth, tokenPrice);
     }
     
     function estimateSellOrder(uint256 amount, bool fromToken) public view returns(uint256, uint256, uint256) {
         uint256 minAmount; uint256 maxAmount;
         (minAmount, maxAmount) = fromToken ? getTokenDealRange() : getEthDealRange();
-
         require(amount >= minAmount && amount <= maxAmount);
 
         uint256 tokenAmount = fromToken ? amount : ethToTokens(amount, false, false);
@@ -913,23 +915,24 @@ contract Mintarama {
         int128 realEthAmount = convert256ToReal(ethAmount);
         int128 t0 = RealMath.div(realEthAmount, _data.getRealTokenPrice());
         int128 s = RealMath.div( getRealPriceSpeed(), RealMath.toReal(isHalfPrice ? 2 : 1) );
-        int128 tns = RealMath.mul(t0, s);
-        int128 exptns = RealMath.exp( RealMath.mul(tns, RealMath.toReal(isBuy ? int64(1) : int64(-1))) );
 
-        int128 tn = t0;
+        int128 tn =  RealMath.div(t0, RealMath.toReal(100));
 
-        for (uint i = 0; i < 10; i++) {
+        for (uint i = 0; i < 100; i++) {
+
+            int128 tns = RealMath.mul(tn, s);
+            int128 exptns = RealMath.exp( RealMath.mul(tns, RealMath.toReal(isBuy ? int64(1) : int64(-1))) );
 
             int128 tn1 = RealMath.div(
-                RealMath.mul( RealMath.mul(RealMath.ipow(tn, 2), s), exptns ) + t0,
+                RealMath.mul( RealMath.mul(tns, tn), exptns ) + t0,
                 RealMath.mul( exptns, RealMath.toReal(1) + tns )
             );
 
+            //if (i == 1) return convertRealTo256(tn1);
             if (RealMath.abs(tn-tn1) < RealMath.fraction(1, 1e18)) break;
 
             tn = tn1;
         }
-
 
         return convertRealTo256(tn);
     }
@@ -984,19 +987,19 @@ contract Mintarama {
     * Converts real num to uint256. Works only with positive numbers.
     */
     function convertRealTo256(int128 realVal) internal pure returns(uint256) {
-        int128 roundedVal = RealMath.fromReal(RealMath.mul(realVal, RealMath.toReal(1e14)));
+        int128 roundedVal = RealMath.fromReal(RealMath.mul(realVal, RealMath.toReal(1e12)));
 
-        return SafeMath.mul(uint256(roundedVal), uint256(1e4));
+        return SafeMath.mul(uint256(roundedVal), uint256(1e6));
     }
 
     /*
     * Converts uint256 to real num.
     */
     function convert256ToReal(uint256 val) internal pure returns(int128) {
-        return RealMath.fraction(int64(SafeMath.div(val, 1e4)), 1e14);
+        return RealMath.fraction(int64(SafeMath.div(val, 1e6)), 1e12);
     }
-}
 
+}
 
 library SafeMath {
 
@@ -1037,16 +1040,19 @@ library SafeMath {
         uint256 c = a + b;
         assert(c >= a);
         return c;
-    }
+    } 
 
-    function add(uint128 a, uint128 b) internal pure returns (uint128) {
-        uint128 c = a + b;
-        assert(c >= a);
-        return c;
-    }        
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }   
+
+    function max(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? b : a;
+    }   
 }
 
 
+//taken from https://github.com/NovakDistributed/macroverse/blob/master/contracts/RealMath.sol and a bit modified
 library RealMath {
     
     /**
@@ -1120,23 +1126,6 @@ library RealMath {
         return int64(real_value / REAL_ONE);
     }
     
-    /**
-     * Round a real to the nearest integral real value.
-     */
-    function round(int128 real_value) internal pure returns (int128) {
-        // First, truncate.
-        int64 ipart = fromReal(real_value);
-        if ((fractionalBits(real_value) & (uint64(1) << (REAL_FBITS - 1))) > 0) {
-            // High fractional bit is set. Round up.
-            if (real_value < int128(0)) {
-                // Rounding up for a negative number is rounding down.
-                ipart -= 1;
-            } else {
-                ipart += 1;
-            }
-        }
-        return toReal(ipart);
-    }
     
     /**
      * Get the absolute value of a real. Just the same as abs on a normal int128.
@@ -1149,12 +1138,6 @@ library RealMath {
         }
     }
     
-    /**
-     * Returns the fractional bits of a real. Ignores the sign of the real.
-     */
-    function fractionalBits(int128 real_value) internal pure returns (uint64) {
-        return uint64(abs(real_value) % REAL_ONE);
-    }
     
     /**
      * Get the fractional part of a real, as a real. Ignores sign (so fpart(-0.5) is 0.5).
@@ -1423,6 +1406,34 @@ library RealMath {
         
     }
 
+    function expLimited(int128 real_arg, int max_iterations, int k) internal pure returns (int128) {
+        // We will accumulate the result here
+        int128 real_result = 0;
+        
+        // We use this to save work computing terms
+        int128 real_term = REAL_ONE;
+        
+        for (int64 n = 0; n < max_iterations; n++) {
+            // Add in the term
+            real_result += real_term;
+            
+            // Compute the next term
+            real_term = mul(real_term, div(real_arg, toReal(n + 1)));
+            
+            if (real_term == 0) {
+                // We must have converged. Next term is too small to represent.
+                break;
+            }
+
+            if (n == k) return real_term;
+
+            // If we somehow never converge I guess we will run out of gas
+        }
+        
+        // Return the result
+        return real_result;
+        
+    }
 
     /**
      * Calculate e^x with a sensible maximum iteration count to wait until
@@ -1482,3 +1493,5 @@ library RealMath {
     }
      
 }
+
+
