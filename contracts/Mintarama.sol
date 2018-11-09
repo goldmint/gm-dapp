@@ -699,15 +699,15 @@ contract Mintarama {
 
         uint256 tokenAmount = fromEth ? ethToTokens(amount, true) : amount;
         uint256 totalFeeEth = calcTotalFee(tokenAmount, true);
-        //require(ethAmount > totalFeeEth);
+        require(ethAmount > totalFeeEth);
 
         uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
 
-        uint256 tokenAmountWoFee = ethToTokens(taxedEth, true);
+        uint256 taxedTokenAmount = ethToTokens(taxedEth, true);
 
-        uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
+        uint256 tokenPrice = SafeMath.div(taxedTokenAmount * 1 ether, tokenAmount);
 
-        return (fromEth ? tokenAmount : SafeMath.add(ethAmount, totalFeeEth), totalFeeEth, tokenPrice);
+        return (fromEth ? taxedTokenAmount : SafeMath.add(ethAmount, totalFeeEth), totalFeeEth, tokenPrice);
     }
     
     function estimateSellOrder(uint256 amount, bool fromToken) public view returns(uint256, uint256, uint256) {
@@ -720,13 +720,14 @@ contract Mintarama {
         
         uint256 ethAmount = fromToken ? tokensToEth(tokenAmount, false) : amount;
         uint256 totalFeeEth = calcTotalFee(tokenAmount, false);
-        //require(ethAmount > totalFeeEth);
+        require(ethAmount > totalFeeEth);
 
+        uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
         uint256 tokenFee = ethToTokens(totalFeeEth, false);
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
         
-        return (fromToken ? ethAmount : SafeMath.add(tokenAmount, tokenFee), totalFeeEth, tokenPrice);
+        return (fromToken ? taxedEth : SafeMath.add(tokenAmount, tokenFee), totalFeeEth, tokenPrice);
     }
 
 
