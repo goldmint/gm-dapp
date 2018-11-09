@@ -654,8 +654,7 @@ contract Mintarama {
         uint256 minTokenVal; uint256 maxTokenVal;
         (minTokenVal, maxTokenVal) = getTokenDealRange();
         
-        //maybe  tokensToEth(maxTokenVal, false, false)
-        return ( SafeMath.max(MIN_ETH_DEAL_VAL, tokensToEth(minTokenVal, true, false)), SafeMath.min(MAX_ETH_DEAL_VAL, tokensToEth(maxTokenVal, true, false)) );
+        return ( SafeMath.max(MIN_ETH_DEAL_VAL, tokensToEth(minTokenVal, true)), SafeMath.min(MAX_ETH_DEAL_VAL, tokensToEth(maxTokenVal, true)) );
     }
 
     function getUserReward(address addr, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
@@ -693,41 +692,41 @@ contract Mintarama {
     function estimateBuyOrder(uint256 amount, bool fromEth) public view returns(uint256, uint256, uint256) {
         uint256 minAmount; uint256 maxAmount;
         (minAmount, maxAmount) = fromEth ? getEthDealRange() : getTokenDealRange();
-        require(amount >= minAmount && amount <= maxAmount);
+        //require(amount >= minAmount && amount <= maxAmount);
 
-        uint256 ethAmount = fromEth ? amount : tokensToEth(amount, true, false);
+        uint256 ethAmount = fromEth ? amount : tokensToEth(amount, true);
         require(ethAmount > 0);
 
-        uint256 totalTokenFee = calcPercent(ethToTokens(ethAmount, true, true) - ethToTokens(ethAmount, true, false), _data.getTotalIncomeFeePercent());
-        require(totalTokenFee > 0);
+        uint256 tokenAmount = fromEth ? ethToTokens(amount, true) : amount;
+        uint256 totalFeeEth = calcTotalFee(tokenAmount, true);
+        //require(ethAmount > totalFeeEth);
 
-        uint256 totalFeeEth = tokensToEth(totalTokenFee, true, true);
-        require(totalFeeEth > 0 && ethAmount > totalFeeEth);
+        uint256 taxedEth = SafeMath.sub(ethAmount, totalFeeEth);
 
-        uint256 tokenAmount = ethToTokens(ethAmount, true, false);
-        require(tokenAmount > 0);
+        uint256 tokenAmountWoFee = ethToTokens(taxedEth, true);
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
 
-        return (fromEth ? tokenAmount : ethAmount, totalFeeEth, tokenPrice);
+        return (fromEth ? tokenAmount : SafeMath.add(ethAmount, totalFeeEth), totalFeeEth, tokenPrice);
     }
     
     function estimateSellOrder(uint256 amount, bool fromToken) public view returns(uint256, uint256, uint256) {
         uint256 minAmount; uint256 maxAmount;
         (minAmount, maxAmount) = fromToken ? getTokenDealRange() : getEthDealRange();
-        require(amount >= minAmount && amount <= maxAmount);
+        //require(amount >= minAmount && amount <= maxAmount);
 
-        uint256 tokenAmount = fromToken ? amount : ethToTokens(amount, false, false);
+        uint256 tokenAmount = fromToken ? amount : ethToTokens(amount, false);
+        require(tokenAmount > 0);
+        
+        uint256 ethAmount = fromToken ? tokensToEth(tokenAmount, false) : amount;
+        uint256 totalFeeEth = calcTotalFee(tokenAmount, false);
+        //require(ethAmount > totalFeeEth);
 
-        uint256 ethAmount = tokensToEth(tokenAmount, false, false);
-        require(ethAmount > 0);
-
-        uint256 totalFeeEth = calcPercent(tokensToEth(tokenAmount, false, true) - tokensToEth(tokenAmount, false, false), _data.getTotalIncomeFeePercent());
-        require(totalFeeEth > 0 && ethAmount > totalFeeEth);
+        uint256 tokenFee = ethToTokens(totalFeeEth, false);
 
         uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
-
-        return (fromToken ? ethAmount : tokenAmount, totalFeeEth, tokenPrice);
+        
+        return (fromToken ? ethAmount : SafeMath.add(tokenAmount, tokenFee), totalFeeEth, tokenPrice);
     }
 
 
@@ -898,14 +897,14 @@ contract Mintarama {
         _token.transferFrom(user, address(this), tokenAmount);    
     }
 
-    function updateTokenPrice(int128 realTokenAmount) internal {
+    function updateTokenPrice(int128 realTokenAmount) public {
         _data.setRealTokenPrice(calc1RealTokenRateFromRealTokens(realTokenAmount));
     }
 
-    function ethToTokens(uint256 ethAmount, bool isBuy, bool isHalfPrice) internal view returns(uint256) {
+    function ethToTokens(uint256 ethAmount, bool isBuy) internal view returns(uint256) {
         int128 realEthAmount = convert256ToReal(ethAmount);
         int128 t0 = RealMath.div(realEthAmount, _data.getRealTokenPrice());
-        int128 s = RealMath.div( getRealPriceSpeed(), RealMath.toReal(isHalfPrice ? 2 : 1) );
+        int128 s = getRealPriceSpeed();
 
         int128 tn =  RealMath.div(t0, RealMath.toReal(100));
 
@@ -919,7 +918,6 @@ contract Mintarama {
                 RealMath.mul( exptns, RealMath.toReal(1) + tns )
             );
 
-            //if (i == 1) return convertRealTo256(tn1);
             if (RealMath.abs(tn-tn1) < RealMath.fraction(1, 1e18)) break;
 
             tn = tn1;
@@ -928,9 +926,9 @@ contract Mintarama {
         return convertRealTo256(tn);
     }
 
-    function tokensToEth(uint256 tokenAmount, bool isBuy, bool isHalfPrice) internal view returns(uint256) {
+    function tokensToEth(uint256 tokenAmount, bool isBuy) internal view returns(uint256) {
         int128 realTokenAmount = convert256ToReal(tokenAmount);
-        int128 s = RealMath.div( getRealPriceSpeed(), RealMath.toReal(isHalfPrice ? 2 : 1) );
+        int128 s = getRealPriceSpeed();
         int128 expArg = RealMath.mul(RealMath.mul(realTokenAmount, s), RealMath.toReal(isBuy ? int64(1) : int64(-1)));
         
         int128 realEthAmountFor1Token = RealMath.mul(_data.getRealTokenPrice(), RealMath.exp(expArg));
@@ -938,6 +936,18 @@ contract Mintarama {
 
         return convertRealTo256(realEthAmount);
     }
+
+    function calcTotalFee(uint256 tokenAmount, bool isBuy) internal view returns(uint256) {
+        int128 realTokenAmount = convert256ToReal(tokenAmount);
+        int128 factor = RealMath.toReal(isBuy ? int64(1) : int64(-1));
+        int128 rateAfterDeal = calc1RealTokenRateFromRealTokens(RealMath.mul(realTokenAmount, factor));
+        int128 delta = RealMath.div(rateAfterDeal - _data.getRealTokenPrice(), RealMath.toReal(2));
+        int128 fee = RealMath.mul(realTokenAmount, delta);
+        
+        return convertRealTo256(RealMath.mul(fee, factor));
+    }
+
+
 
     function calc1RealTokenRateFromRealTokens(int128 realTokenAmount) internal view returns(int128) {
         int128 expArg = RealMath.mul(realTokenAmount, getRealPriceSpeed());
