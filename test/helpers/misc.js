@@ -660,8 +660,8 @@ function deployGoldContract(data,cb){
 }
 
 function deployMintaramaContract(data,cb){
-     var file = './contracts/Mintarama.sol';
-     var contractName = ':Mintarama';
+     var file = './contracts/Etherama.sol';
+     var contractName = ':Etherama';
 
      fs.readFile(file, function(err, result){
           assert.equal(err,null);

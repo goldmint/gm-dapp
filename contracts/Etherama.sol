@@ -6,7 +6,7 @@ contract IStdToken {
     function transferFrom(address _from, address _to, uint256 _value) public returns(bool);
 }
 
-contract MintaramaData {
+contract EtheramaData {
 
     uint256 constant private TOKEN_PRICE_INITIAL = 0.001 ether;
 
@@ -55,7 +55,7 @@ contract MintaramaData {
         _;
     }
 
-    function MintaramaData() public {
+    function EtheramaData() public {
         _controllerAddress = msg.sender;
     }
 
@@ -317,10 +317,10 @@ contract MintaramaData {
     }
 }
 
-contract Mintarama {
+contract Etherama {
 
     IStdToken _token;
-    MintaramaData _data;
+    EtheramaData _data;
 
     uint256 constant internal MAGNITUDE = 2**64;
 
@@ -382,10 +382,10 @@ contract Mintarama {
         _;
     }
 
-    function Mintarama(address erc20TokenAddress, address dataContractAddress, uint64 expirationInDays) public {
+    function Etherama(address erc20TokenAddress, address dataContractAddress, uint64 expirationInDays) public {
         _token = IStdToken(erc20TokenAddress);
         
-        _data = dataContractAddress != 0x0 ? MintaramaData(dataContractAddress) : new MintaramaData();
+        _data = dataContractAddress != 0x0 ? EtheramaData(dataContractAddress) : new EtheramaData();
         
         if (dataContractAddress == 0x0) {
             _data.init(expirationInDays, convert256ToReal(_data.getTokenInitialPrice()));
@@ -418,18 +418,19 @@ contract Mintarama {
     /**
      * Converts incoming eth to tokens
      */
-    function buy(address refAddress) onlyActive public payable returns(uint256) {
-        return purchaseTokens(msg.value, refAddress);
+    function buy(address refAddress, uint256 minReturn) onlyActive public payable returns(uint256) {
+        return purchaseTokens(msg.value, refAddress, minReturn);
     }
 
     /**
      * sell tokens for eth
      */
-    function sell(uint256 tokenAmount) onlyActive onlyContractUsers public returns(uint256) {
+    function sell(uint256 tokenAmount, uint256 minReturn) onlyActive onlyContractUsers public returns(uint256) {
         if (tokenAmount > getCurrentUserLocalTokenBalance() || tokenAmount == 0) return;
 
         uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
         (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount, true);
+        require(ethAmount >= minReturn);
 
         subUserTokens(msg.sender, tokenAmount);
 
@@ -449,7 +450,7 @@ contract Mintarama {
      * Fallback function to handle ethereum that was send straight to the contract
      */
     function() onlyActive payable public {
-        purchaseTokens(msg.value, 0x0);
+        purchaseTokens(msg.value, 0x0, 1);
     }
 
     /**
@@ -458,7 +459,7 @@ contract Mintarama {
     function reinvest() onlyActive onlyRewardOwners public {
         uint256 reward = getRewardAndPrepareWithdraw();
 
-        uint256 tokens = purchaseTokens(reward, 0x0);
+        uint256 tokens = purchaseTokens(reward, 0x0, 0);
         
         onReinvestment(msg.sender, reward, tokens);
     }
@@ -516,7 +517,7 @@ contract Mintarama {
 
         isActive = false;
 
-        Mintarama newController = Mintarama(newControllerAddr);
+        Etherama newController = Etherama(newControllerAddr);
         _data.setNewControllerAddress(newControllerAddr);
 
         uint256 remainingTokenAmount = getRemainingTokenAmount();
@@ -764,11 +765,12 @@ contract Mintarama {
 
     // INTERNAL FUNCTIONS
     
-    function purchaseTokens(uint256 ethAmount, address refAddress) internal returns(uint256) {
+    function purchaseTokens(uint256 ethAmount, address refAddress, uint256 minReturn) internal returns(uint256) {
         if (getTotalTokenSupply() == 0) setTotalSupply();
 
         uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
         (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount, true);
+        require(tokenAmount >= minReturn);
 
         //user has to have at least equal amount of tokens which he's willing to buy 
         require(getCurrentUserMaxPurchase() >= tokenAmount);
