@@ -198,6 +198,7 @@ contract EtheramaData {
     mapping(address => uint256) private _promoBonuses;
 
     mapping(bytes32 => bool) private _administrators;
+    uint256 private  _administratorCount;
 
 
     uint256 private _totalIncomeFeePercent = 100 ether;
@@ -214,6 +215,10 @@ contract EtheramaData {
     address private _controllerAddress = 0x0;
 
     EtheramaCommonData private _common;
+
+    uint256 private _buyCount;
+    uint256 private _sellCount;
+
 
     //only main contract
     modifier onlyController() {
@@ -306,10 +311,16 @@ contract EtheramaData {
     
     function addAdministator(address addr) onlyController public {
         _administrators[keccak256(addr)] = true;
+        _administratorCount = SafeMath.add(_administratorCount, 1);
     }
 
     function removeAdministator(address addr) onlyController public {
         _administrators[keccak256(addr)] = false;
+        _administratorCount = SafeMath.sub(_administratorCount, 1);
+    }
+
+    function getAdministratorCount() public view returns(uint256) {
+        return _administratorCount;
     }
     
     function isAdministrator(address addr) public view returns(bool) {
@@ -483,7 +494,6 @@ contract EtheramaData {
     function getTotalSupply() public view returns (uint256) {
         return _totalSupply;
     }
-    
 
     function setRealTokenPrice(int128 val) onlyController public {
         _realTokenPrice = val;
@@ -491,6 +501,14 @@ contract EtheramaData {
     
     function getRealTokenPrice() public view returns (int128) {
         return _realTokenPrice;
+    }
+
+    function incBuyCount() onlyController public {
+        _buyCount = SafeMath.add(_buyCount, 1);
+    }
+
+    function incSellCount() onlyController public {
+        _sellCount = SafeMath.add(_sellCount, 1);
     }
 }
 
@@ -618,6 +636,8 @@ contract Etherama {
         updateTokenPrice(-convert256ToReal(tokenAmount));
 
         distributeFee(totalFeeEth, 0x0);
+
+        _data.incSellCount();
        
         onTokenSell(msg.sender, tokenAmount, ethAmount);
 
@@ -963,6 +983,8 @@ contract Etherama {
         
         updateTokenPrice(convert256ToReal(tokenAmount));
         
+        _data.incBuyCount();
+
         onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
         return tokenAmount;
@@ -1652,14 +1674,6 @@ library RealMath {
         // If it's not a special case, actually do it.
         return exp(mul(real_exponent, ln(real_base)));
     }
-    
-    /**
-     * Compute the square root of a number.
-     */
-    function sqrt(int128 real_arg) internal pure returns (int128) {
-        return pow(real_arg, REAL_HALF);
-    }
-     
 }
 
 
