@@ -88,13 +88,22 @@ contract EtheramaCommonData is EtheramaGasPriceLimit {
     
     mapping(address => bool) private _dataContracts;
     
+    uint256 private _initBlockNum;
+
+    
     
     modifier onlyDataContract() {
         require(_dataContracts[msg.sender]);
         _;
     }
     
-    function EtheramaCommonData(uint256 maxGasPrice) EtheramaGasPriceLimit(maxGasPrice) public { }
+    function EtheramaCommonData(uint256 maxGasPrice) EtheramaGasPriceLimit(maxGasPrice) public { 
+         _initBlockNum = block.number;
+    }
+    
+    function getInitBlockNum() public view returns (uint256) {
+        return _initBlockNum;
+    }
     
     function addDataContract(address addr) onlyAdministrator public {
         _dataContracts[addr] = true;
@@ -197,11 +206,6 @@ contract EtheramaData {
     uint256 private _devRewardPercent = 40 ether;
     uint256 private _shareRewardPercent = 30 ether;
     uint256 private _refBonusPercent = 20 ether;
-    uint256 private _bigPromoPercent = 5 ether;
-    uint256 private _quickPromoPercent = 5 ether;
-
-    uint128 private _bigPromoBlockInterval = 9999;
-    uint128 private _quickPromoBlockInterval = 100;
 
     int64 private _priceSpeedPercent = 5;
     int64 private _priceSpeedTokenBlock = 10000;
@@ -210,7 +214,8 @@ contract EtheramaData {
     mapping(address => uint256) private _userTokenBalances;
     mapping(address => uint256) private _refBalances;
     mapping(address => uint256) private _rewardPayouts;
-    mapping(address => uint256) private _promoBonuses;
+    mapping(address => uint256) private _promoQuickBonuses;
+    mapping(address => uint256) private _promoBigBonuses;
 
     mapping(bytes32 => bool) private _administrators;
     uint256 private  _administratorCount;
@@ -218,7 +223,6 @@ contract EtheramaData {
 
     uint256 private _totalIncomeFeePercent = 100 ether;
     uint256 private _minRefTokenAmount = 1 ether;
-    uint256 private _initBlockNum;
     uint64 private _initTime;
     uint64 private _expirationPeriodDays;
     uint256 private _bonusPerShare;
@@ -246,6 +250,12 @@ contract EtheramaData {
 
         _controllerAddress = msg.sender;
         _common = EtheramaCommonData(commonDataAddress);
+    }
+    
+    function init(uint64 expPeriodDays, int128 initRealTokenPrice) onlyController public {
+        _initTime = uint64(now);
+        _expirationPeriodDays = _initTime + expPeriodDays * 1 days;
+        _realTokenPrice = initRealTokenPrice;
     }
     
     function getEtheramaCommonAddress() public view returns(address) {
@@ -392,27 +402,31 @@ contract EtheramaData {
     }
     
 
-    function setUserPromoBonus(address addr, uint256 val) onlyController public {
-        _promoBonuses[addr] = val;
+    function resetUserPromoBonus(address addr) onlyController public {
+        _promoQuickBonuses[addr] = 0;
+        _promoBigBonuses[addr] = 0;
     }
     
-    function addUserPromoBonus(address addr, uint256 val) internal {
-        _promoBonuses[addr] = SafeMath.add(_promoBonuses[addr], val);
-    }  
-    
-    function getUserPromoBonus(address addr) public view returns (uint256) {
-        return _promoBonuses[addr];
+    function getUserTotalPromoBonus(address addr) public view returns (uint256) {
+        return SafeMath.add(_promoQuickBonuses[addr], _promoBigBonuses[addr]);
     }
     
-        
+    function getUserQuickPromoBonus(address addr) public view returns (uint256) {
+        return _promoQuickBonuses[addr];
+    }
+    
+    function getUserBigPromoBonus(address addr) public view returns (uint256) {
+        return _promoBigBonuses[addr];
+    }
+    
     function payoutQuickBonus(address addr) onlyController public {
         _common.transferQuickBonus();
-        addUserPromoBonus(addr, getCurrentQuickPromoBonus());
+        _promoQuickBonuses[addr] = SafeMath.add(_promoQuickBonuses[addr], getCurrentQuickPromoBonus());
     }
     
     function payoutBigBonus(address addr) onlyController public {
         _common.transferBigBonus();
-         addUserPromoBonus(addr, getCurrentBigPromoBonus());
+        _promoBigBonuses[addr] = SafeMath.add(_promoBigBonuses[addr], getCurrentBigPromoBonus());
     }
     
     function acceptBonusPayout() payable public {
@@ -428,19 +442,14 @@ contract EtheramaData {
         return _minRefTokenAmount;
     }    
 
-    function init(uint64 expPeriodDays, int128 initRealTokenPrice) onlyController public {
-        _initBlockNum = block.number;
-        _initTime = uint64(now);
-        _expirationPeriodDays = _initTime + expPeriodDays * 1 days;
-        _realTokenPrice = initRealTokenPrice;
-    }
+
     
     function getExpirationPeriodDays() public view returns (uint256) {
         return _expirationPeriodDays;
     } 
     
     function getInitBlockNum() public view returns (uint256) {
-        return _initBlockNum;
+        return _common.getInitBlockNum();
     }
     
     function addBonusPerShare(uint256 val) onlyController public {
@@ -901,7 +910,7 @@ contract Etherama {
         reward = ((reward < _data.getUserRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, _data.getUserRewardPayouts(userAddress))) / MAGNITUDE;
         
         if (incRefBonus) reward = SafeMath.add(reward, _data.getUserRefBalance(userAddress));
-        if (incPromoBonus) reward = SafeMath.add(reward, _data.getUserPromoBonus(userAddress));
+        if (incPromoBonus) reward = SafeMath.add(reward, _data.getUserTotalPromoBonus(userAddress));
         
         return reward;
     }
@@ -975,8 +984,16 @@ contract Etherama {
         return _data.getDevReward();
     }
 
-    function getCurrentUserPromoBonus() public view returns(uint256) {
-        return _data.getUserPromoBonus(msg.sender);
+    function getCurrentUserTotalPromoBonus() public view returns(uint256) {
+        return _data.getUserTotalPromoBonus(msg.sender);
+    }
+
+    function getCurrentUserBigPromoBonus() public view returns(uint256) {
+        return _data.getUserBigPromoBonus(msg.sender);
+    }
+
+    function getCurrentUserQuickPromoBonus() public view returns(uint256) {
+        return _data.getUserQuickPromoBonus(msg.sender);
     }
 
     function getCurrentUserRefBonus() public view returns(uint256) {
@@ -1058,8 +1075,8 @@ contract Etherama {
         _data.setUserRefBalance(msg.sender, 0);
 
         // add promo bonus
-        reward = SafeMath.add(reward, _data.getUserPromoBonus(msg.sender));
-        _data.setUserPromoBonus(msg.sender, 0);
+        reward = SafeMath.add(reward, _data.getUserTotalPromoBonus(msg.sender));
+        _data.resetUserPromoBonus(msg.sender);
 
         return reward;
     }

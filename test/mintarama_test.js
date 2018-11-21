@@ -320,6 +320,8 @@ describe('MINTARAMA', function() {
         
     });  
 */
+
+
     it('should make a purchase behalf buyer1 1', async() => {
         {
             var ethAmount = 2 * ether;
@@ -762,97 +764,99 @@ describe('MINTARAMA', function() {
 
     it('should check promo bonuses', async() => {
 
-        var promoBonus1 = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
+        var promoBonus1 = await mraContract.getCurrentUserTotalPromoBonus({ from: buyer1 });
         
         await updateBlockNum();
-
+    
         if (blockNum % quickPromoInterval == 0) await mraContract.buy(0x0, 1, { from: buyer1, gas: 2900000, value: 0.01 * ether });
         
         //should not win if a purchase is too small
         
         {
             await updateBlockNum();
-
+    
             while(blockNum % quickPromoInterval != 0) {
-                var promoBonus = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
+                var promoBonus = await mraContract.getCurrentUserTotalPromoBonus({ from: buyer1 });
                 var ethAmount = promoMinPurchaseEth * 0.4;
-
+    
                 assert(promoBonus.sub(promoBonus1) == 0);
-
+    
                 var est = await mraContract.estimateBuyOrder(ethAmount, true);
                 var estimateTokenAmount = est[0]; 
                 //console.log("buy est: " + est);
-
+    
                 var curMaxPurchase = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
                 //console.log("curMaxPurchase: " + curMaxPurchase + "; estimateTokenAmount: " + estimateTokenAmount);
                 assert(curMaxPurchase.sub(estimateTokenAmount) > 0);
-
+    
                 await mraContract.buy(0x0, estimateTokenAmount, { from: buyer1, gas: 2900000, value: ethAmount });
-
-
+    
+    
                 await updateBlockNum();
-                promoBonus = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
+                promoBonus = await mraContract.getCurrentUserTotalPromoBonus({ from: buyer1 });
             }
-
-            var promoBonus2 = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
-
+    
+            var promoBonus2 = await mraContract.getCurrentUserTotalPromoBonus({ from: buyer1 });
+    
             assert(promoBonus2.sub(promoBonus1) == 0);
         }
-
-        var promoBonus1 = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
-
-        // should win if a purchase is enough
+    
+        var promoBonus1 = await mraContract.getCurrentUserQuickPromoBonus({ from: buyer1 });
+    
+        // should win a quick promo if a purchase is enough
         {
             var ethAmount = promoMinPurchaseEth;
             var est = await mraContract.estimateBuyOrder(ethAmount, true);
             var estimateTokenAmount = est[0]; 
             await updateBlockNum();
-
+    
             if (blockNum % quickPromoInterval == 0) await mraContract.buy(0x0, 1, { from: buyer1, gas: 2900000, value: 0.01 * ether });
             await updateBlockNum();
-
+    
             //should win a quick promo
             while(blockNum % quickPromoInterval != 0) {
                 //console.log("rem block: " + await mraContract.getQuickPromoRemainingBlocks())
-                var promoBonus = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
+                var promoBonus = await mraContract.getCurrentUserQuickPromoBonus({ from: buyer1 });
                 //console.log("1 - blockNum: " + blockNum + "; promoBonus: " + promoBonus.toString(10) +"; promoBonus1: " + promoBonus1.toString(10));
-
+    
                 assert(promoBonus.sub(promoBonus1) == 0);
                 var mraContractUserBalance2 = mraContract.getCurrentUserLocalTokenBalance({ from: buyer1 });
                 var maxPurchaseTokenAmount = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
                 //console.log("mraContractUserBalance2: " + mraContractUserBalance2.toString(10) + "; maxPurchaseTokenAmount: " + maxPurchaseTokenAmount.toString(10) + "; tokenAmount: " + estimateTokenAmount.toString(10));
-
+    
                 await mraContract.buy(0x0, 1, { from: buyer1, gas: 400000, value: ethAmount });
                 await updateBlockNum();
-                promoBonus = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
-                //console.log("2 - blockNum: " + blockNum + "; promoBonus: " + promoBonus.toString(10) +"; promoBonus1: " + promoBonus1.toString(10));
+                promoBonus = await mraContract.getCurrentUserQuickPromoBonus({ from: buyer1 });
+                //console.log("2 - blockNum: " + blockNum + "; getCurrentUserQuickPromoBonus: " + promoBonus.toString(10) +"; promoBonus1: " + promoBonus1.toString(10));
             }
-
-            var promoBonus2 = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
+    
+            var promoBonus2 = await mraContract.getCurrentUserQuickPromoBonus({ from: buyer1 });
             //console.log("promoBonus2: " + promoBonus2);
             assert(promoBonus2.sub(promoBonus1) > 0);
-
+    
             await updateBlockNum();
             if (blockNum % bigPromoInterval == 0) await mraContract.buy(0x0, 1, { from: buyer1, gas: 2900000, value: 0.01 * ether });
             
             await updateBlockNum();
-
-            //should win a quick promo
+    
+            var promoBonus3 = await mraContract.getCurrentUserBigPromoBonus({ from: buyer1 });
+    
+            //should win a big promo
             while(blockNum % bigPromoInterval != 0) {
                 console.log("rem block: " + await mraContract.getBigPromoRemainingBlocks())
-
-                var promoBonus = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
-
-                assert(promoBonus.sub(promoBonus2) == 0);
-
+    
+                var promoBonus = await mraContract.getCurrentUserBigPromoBonus({ from: buyer1 });
+    
+                assert(promoBonus.sub(promoBonus3) == 0);
+    
                 await mraContract.buy(0x0, 1, { from: buyer1, gas: 2900000, value: ethAmount });
                 await updateBlockNum();
                 //console.log("blockNum: " + blockNum + "; promoBonus: " + promoBonus.toString(10) +"; promoBonus2: " + promoBonus2.toString(10));
             }
-
-            var promoBonus3 = await mraContract.getCurrentUserPromoBonus({ from: buyer1 });
-            console.log("promoBonus3: " + promoBonus3);
-            assert(promoBonus3.sub(promoBonus2) > 0);
+    
+            var promoBonus4 = await mraContract.getCurrentUserBigPromoBonus({ from: buyer1 });
+            console.log("promoBonus4: " + promoBonus4);
+            assert(promoBonus4.sub(promoBonus3) > 0);
         }
     });
 
