@@ -133,6 +133,8 @@ describe('MINTARAMA', function() {
                buyer4 = as[4];
                buyer5 = as[5];
 
+               newAdmin = as[9];
+
                done();
           });
     });
@@ -140,6 +142,8 @@ describe('MINTARAMA', function() {
     after("Deinitialize everything", function(done) {
           done();
     });    
+
+
 
     it('should deploy token contract', function(done) {
           var data = {};
@@ -160,6 +164,7 @@ describe('MINTARAMA', function() {
           });
 
     });
+
 
     it('should set initial state', async() => {
 
@@ -222,7 +227,6 @@ describe('MINTARAMA', function() {
 
         await mraContract.setActive(true, { from: creator });
     });
-
 
   /*  
 
@@ -1100,9 +1104,28 @@ describe('MINTARAMA', function() {
         assert(Math.abs(tokenPrice - startTokenPrice) < 1E-12);        
     });
 
+    
+    it('should transfer ownership', function(done) {
+        mraContract.transferOwnership(newAdmin, { from: creator }, function(err) {
+            assert.equal(err, null);
+
+            mraContract.acceptOwnership({ from: newAdmin }, function(err) {
+                assert.equal(err, null);
+                
+                mraContract.addAdministator(buyer5, { from: creator }, function(err) {
+                    assert.notEqual(err, null);
+                    done();
+                });
+            })
+            
+        });
+
+    });
+
+
 });
 
-describe('MINTARAMA NEW CONTROLLER', function(){
+describe('ETHERARAMA NEW CONTROLLER', function(){
 
     before("Initialize everything", function(done) {
         web3.eth.getAccounts(function(err, as) {
@@ -1142,7 +1165,7 @@ describe('MINTARAMA NEW CONTROLLER', function(){
 
             console.log("dataContractAddress: " + dataContractAddress);
 
-            deployMintaramaContract(data, function(err){
+            deployEtheramaContract(data, function(err){
                 assert.equal(err,null);
     
                 done();

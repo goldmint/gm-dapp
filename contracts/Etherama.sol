@@ -510,6 +510,14 @@ contract EtheramaData {
     function incSellCount() onlyController public {
         _sellCount = SafeMath.add(_sellCount, 1);
     }
+
+    function getBuyCount() public view returns(uint256) {
+        return _buyCount;
+    }
+
+    function getSellCount() public view returns(uint256) {
+        return _sellCount;
+    }        
 }
 
 
@@ -529,6 +537,8 @@ contract Etherama {
     
     bool public isActive = false;
     bool public isMigrationToNewControllerInProgress = false;
+
+    address private _creator = 0x0;
 
 
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
@@ -591,6 +601,7 @@ contract Etherama {
         if (dataContractAddress == 0x0) {
             _data.init(expirationInDays, convert256ToReal(_data.getTokenInitialPrice()));
             _data.addAdministator(msg.sender);
+            _creator = msg.sender;
         }
     }
 
@@ -600,6 +611,17 @@ contract Etherama {
 
     function removeAdministator(address addr) onlyAdministrator public {
         _data.removeAdministator(addr);
+    }
+
+    function transferOwnership(address addr) onlyAdministrator public {
+        addAdministator(addr);
+    }
+
+    function acceptOwnership() onlyAdministrator public {
+        require(_creator != 0x0);
+        removeAdministator(_creator);
+
+        require(_data.getAdministratorCount() == 1);
     }
         
     function setActive(bool val) onlyAdministrator public {
@@ -719,6 +741,18 @@ contract Etherama {
         if (remainingTokenAmount > 0) _token.transfer(newControllerAddr, remainingTokenAmount); 
         if (ethBalance > 0) newController.activateNewController.value(ethBalance)();
     }
+
+    function getBuyCount() public view returns(uint256) {
+        return _data.getBuyCount();
+    }
+
+    function getSellCount() public view returns(uint256) {
+        return _data.getSellCount();
+    }
+
+    function getBonusPerShare() public view returns (uint256) {
+        return _data.getBonusPerShare() / MAGNITUDE;
+    }    
 
     function getTokenInitialPrice() public view returns(uint256) {
         return _data.getTokenInitialPrice();
