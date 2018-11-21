@@ -9,9 +9,17 @@ contract IStdToken {
 contract EtheramaCommon {
     
     mapping(bytes32 => bool) private _administrators;
+
+    mapping(bytes32 => bool) private _managers;
+
     
     modifier onlyAdministrator() {
         require(_administrators[keccak256(msg.sender)]);
+        _;
+    }
+
+    modifier onlyAdministratorOrManager() {
+        require(_administrators[keccak256(msg.sender)] || _managers[keccak256(msg.sender)]);
         _;
     }
     
@@ -28,6 +36,13 @@ contract EtheramaCommon {
         _administrators[keccak256(addr)] = false;
     }
 
+    function addManager(address addr) onlyAdministrator public {
+        _managers[keccak256(addr)] = true;
+    }
+
+    function removeManager(address addr) onlyAdministrator public {
+        _managers[keccak256(addr)] = false;
+    }
 }
 
 
@@ -50,7 +65,7 @@ contract EtheramaGasPriceLimit is EtheramaCommon {
         return MAX_GAS_PRICE;
     }
     
-    function setMaxGasPrice(uint256 val) public validGasPrice(val) onlyAdministrator {
+    function setMaxGasPrice(uint256 val) public validGasPrice(val) onlyAdministratorOrManager {
         MAX_GAS_PRICE = val;
         
         onSetMaxGasPrice(val);
