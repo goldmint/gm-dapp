@@ -201,14 +201,16 @@ contract EtheramaCommonData is EtheramaGasPriceLimit {
 
 contract EtheramaData {
 
+    address private _tokenContractAddress;
+    
     uint256 constant private TOKEN_PRICE_INITIAL = 0.001 ether;
 
     uint256 private _devRewardPercent = 40 ether;
     uint256 private _shareRewardPercent = 30 ether;
     uint256 private _refBonusPercent = 20 ether;
 
-    int64 private _priceSpeedPercent = 5;
-    int64 private _priceSpeedTokenBlock = 10000;
+    uint64 private _priceSpeedPercent = 5;
+    uint64 private _priceSpeedBlocks = 10000;
 
     
     mapping(address => uint256) private _userTokenBalances;
@@ -224,7 +226,7 @@ contract EtheramaData {
     uint256 private _totalIncomeFeePercent = 100 ether;
     uint256 private _minRefTokenAmount = 1 ether;
     uint64 private _initTime;
-    uint64 private _expirationPeriodDays;
+    uint64 private _expirationTime;
     uint256 private _bonusPerShare;
     uint256 private _devReward;
     
@@ -238,6 +240,9 @@ contract EtheramaData {
     uint256 private _buyCount;
     uint256 private _sellCount;
 
+    uint256 private _initBlockNum;
+    
+    IStdToken _token;
 
     //only main contract
     modifier onlyController() {
@@ -250,16 +255,27 @@ contract EtheramaData {
 
         _controllerAddress = msg.sender;
         _common = EtheramaCommonData(commonDataAddress);
+        _initBlockNum = block.number;
     }
     
-    function init(uint64 expPeriodDays, int128 initRealTokenPrice) onlyController public {
+    function init(address tokenContractAddress, uint64 expPeriodDays, int128 initRealTokenPrice, uint64 priceSpeedPercent, uint64 priceSpeedBlocks) onlyController public {
+        require(tokenContractAddress != 0x0);
+
+        _token = IStdToken(tokenContractAddress);
         _initTime = uint64(now);
-        _expirationPeriodDays = _initTime + expPeriodDays * 1 days;
+        _expirationTime = _initTime + expPeriodDays * 1 days;
         _realTokenPrice = initRealTokenPrice;
+        
+        if (priceSpeedPercent > 0) _priceSpeedPercent = uint64(priceSpeedPercent);
+        if (priceSpeedBlocks > 0) _priceSpeedBlocks = uint64(priceSpeedBlocks);
     }
     
     function getEtheramaCommonAddress() public view returns(address) {
         return address(_common);
+    }
+    
+    function getToken() public view returns(IStdToken) {
+        return _token;
     }
     
     function getMaxGasPrice() public view returns(uint256) {
@@ -319,18 +335,13 @@ contract EtheramaData {
     function getPromoMinPurchaseEth() public view returns(uint256) {
         return _common.getPromoMinPurchaseEth();
     }
-    
-    function setPriceSpeed(uint64 speedPercent, uint64 speedTokenBlock) onlyController public {
-        _priceSpeedPercent = int64(speedPercent);
-        _priceSpeedTokenBlock = int64(speedTokenBlock);
-    }
 
-    function getPriceSpeedPercent() public view returns(int64) {
+    function getPriceSpeedPercent() public view returns(uint64) {
         return _priceSpeedPercent;
     }
     
-    function getPriceSpeedTokenBlock() public view returns(int64) {
-        return _priceSpeedTokenBlock;
+    function getPriceSpeedBlocks() public view returns(uint64) {
+        return _priceSpeedBlocks;
     }
 
     
@@ -442,13 +453,13 @@ contract EtheramaData {
         return _minRefTokenAmount;
     }    
 
+    
+    function getExpirationTime() public view returns (uint256) {
+        return _expirationTime;
+    } 
 
     
-    function getExpirationPeriodDays() public view returns (uint256) {
-        return _expirationPeriodDays;
-    } 
-    
-    function getInitBlockNum() public view returns (uint256) {
+    function getCommonInitBlockNum() public view returns (uint256) {
         return _common.getInitBlockNum();
     }
     
@@ -615,18 +626,19 @@ contract Etherama {
         _;
     }
 
-    function Etherama(address erc20TokenAddress, address dataContractAddress, address commonDataAddress, uint64 expirationInDays) public {
+    function Etherama(address tokenContractAddress, address dataContractAddress, address commonDataAddress, 
+        uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedBlocks) public {
         require(commonDataAddress != 0x0);
        
-        _token = IStdToken(erc20TokenAddress);
-        
         _data = dataContractAddress != 0x0 ? EtheramaData(dataContractAddress) : new EtheramaData(commonDataAddress);
         
         if (dataContractAddress == 0x0) {
-            _data.init(expirationInDays, convert256ToReal(_data.getTokenInitialPrice()));
+            _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.getTokenInitialPrice()), priceSpeedPercent, priceSpeedBlocks);
             _data.addAdministator(msg.sender);
             _creator = msg.sender;
         }
+        
+        _token = _data.getToken();
     }
 
     function addAdministator(address addr) onlyAdministrator public {
@@ -654,14 +666,14 @@ contract Etherama {
     }
     
     function finish() onlyAdministrator public {
-        require(uint(now) >= _data.getExpirationPeriodDays());
+        require(uint64(now) >= _data.getExpirationTime());
         
         _token.transfer(msg.sender, getRemainingTokenAmount());   
         msg.sender.transfer(getTotalEthBalance());
         
         isActive = false;
     }
-
+    
     //Converts incoming eth to tokens
     function buy(address refAddress, uint256 minReturn) onlyActive validGasPrice public payable returns(uint256) {
         return purchaseTokens(msg.value, refAddress, minReturn);
@@ -736,6 +748,21 @@ contract Etherama {
 
     //HELPERS
     
+    function getMaxGasPrice() public view returns(uint256) {
+        return _data.getMaxGasPrice();
+    }
+    
+    function getExpirationTime() public view returns (uint256) {
+        return _data.getExpirationTime();
+    }
+            
+    function getRemainingTimeTillExpiration() public view returns (uint256) {
+        if (_data.getExpirationTime() <= uint64(now)) return 0;
+        
+        return _data.getExpirationTime() - uint64(now);
+    }
+
+    
     function isCurrentUserAdministrator() public view returns(bool) {
         return _data.isAdministrator(msg.sender);
     }
@@ -775,7 +802,7 @@ contract Etherama {
     }
 
     function getBonusPerShare() public view returns (uint256) {
-        return _data.getBonusPerShare() / MAGNITUDE;
+        return SafeMath.div(SafeMath.mul(_data.getBonusPerShare(), 1 ether), MAGNITUDE);
     }    
 
     function getTokenInitialPrice() public view returns(uint256) {
@@ -814,16 +841,13 @@ contract Etherama {
         return _data.getPromoMinPurchaseEth();
     }
 
-    function setPriceSpeed(uint64 speedPercent, uint64 speedTokenBlock) onlyAdministrator public {
-        _data.setPriceSpeed(speedPercent, speedTokenBlock);
-    }
 
-    function getPriceSpeedPercent() public view returns(int64) {
+    function getPriceSpeedPercent() public view returns(uint64) {
         return _data.getPriceSpeedPercent();
     }
 
-    function getPriceSpeedTokenBlock() public view returns(int64) {
-        return _data.getPriceSpeedTokenBlock();
+    function getPriceSpeedTokenBlock() public view returns(uint64) {
+        return _data.getPriceSpeedBlocks();
     }
 
     function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
@@ -1001,7 +1025,7 @@ contract Etherama {
     }
    
     function getBlockNumSinceInit() public view returns(uint256) {
-        return block.number - _data.getInitBlockNum();
+        return block.number - _data.getCommonInitBlockNum();
     }
 
     function getQuickPromoRemainingBlocks() public view returns(uint256) {
@@ -1215,7 +1239,7 @@ contract Etherama {
     }
     
     function getRealPriceSpeed() internal view returns(int128) {
-        return RealMath.div(RealMath.fraction(_data.getPriceSpeedPercent(), 100), RealMath.toReal(_data.getPriceSpeedTokenBlock()));
+        return RealMath.div(RealMath.fraction(int64(_data.getPriceSpeedPercent()), 100), RealMath.toReal(int64(_data.getPriceSpeedBlocks())));
     }
 
 

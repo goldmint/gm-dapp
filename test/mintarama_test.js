@@ -199,6 +199,7 @@ describe('MINTARAMA', function() {
         assert.equal(buyerTokenAmount, mntContract.balanceOf(buyer5));
 
         addAccountInitBalance(buyer5, buyerTokenAmount);
+
     });
 
     it('init vars', async() => {
@@ -226,6 +227,10 @@ describe('MINTARAMA', function() {
         minRefTokenAmount = await mraContract.getMinRefTokenAmount();
 
         await mraContract.setActive(true, { from: creator });
+
+        var remTime = await mraContract.getRemainingTimeTillExpiration();
+        console.log(remTime.toString(10));
+
     });
 
   /*  
