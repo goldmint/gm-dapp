@@ -113,7 +113,7 @@ function getContractBalanceEth() {
 
 eval(fs.readFileSync('./test/helpers/misc.js')+'');
 
-describe('MINTARAMA', function() {
+describe('ETHERARAMA', function() {
 
     before("Initialize everything", function(done) {
           web3.eth.getAccounts(function(err, as) {
@@ -1186,7 +1186,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
 
     it('should change controller', async() => {
 
-        await mraContractOld.buy(0x0, { from: buyer1, gas: 2900000, value: 2 * ether });
+        await mraContractOld.buy(0x0, 1, { from: buyer1, gas: 2900000, value: 2 * ether });
 
         var oldContractTokenBalance = await mraContractOld.getRemainingTokenAmount();
         var oldContractEthBalance = await mraContractOld.getTotalEthBalance();
@@ -1220,7 +1220,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
 
         var ethAmount = 2 * ether;
 
-        mraContractOld.buy(0x0, { from: buyer1, gas: 2900000, value: ethAmount }, function(err, res) {
+        mraContractOld.buy(0x0, 1, { from: buyer1, gas: 2900000, value: ethAmount }, function(err, res) {
             assert.notEqual(err, null);
 
             web3.eth.sendTransaction({ from: buyer1, to: mraContractAddressOld, value: ethAmount, gas: 2900000 }, function(err1, res) {
