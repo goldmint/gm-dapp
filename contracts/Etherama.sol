@@ -318,6 +318,9 @@ contract EtheramaData {
 
     function setRewardPercentages(uint256 tokenOwnerRewardPercent, uint256 shareRewardPercent, uint256 refBonusPercent) onlyController public {
         require(tokenOwnerRewardPercent <= 40 ether);
+        require(shareRewardPercent <= 100 ether);
+        require(refBonusPercent <= 100 ether);
+
         require(tokenOwnerRewardPercent + shareRewardPercent + refBonusPercent + getDevRewardPercent() + getBigPromoPercent() + getQuickPromoPercent() == 100 ether);
 
         _tokenOwnerRewardPercent = tokenOwnerRewardPercent;
@@ -633,8 +636,6 @@ contract Etherama {
         _data = dataContractAddress != 0x0 ? EtheramaData(dataContractAddress) : new EtheramaData(coreAddress);
         
         if (dataContractAddress == 0x0) {
-            require(expirationInDays > 0 && priceSpeedPercent > 0 && priceSpeedBlocks > 0);
-
             _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.getTokenInitialPrice()), priceSpeedPercent, priceSpeedBlocks);
             _data.addAdministator(msg.sender);
             _creator = msg.sender;
