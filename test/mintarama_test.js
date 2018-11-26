@@ -22,8 +22,8 @@ var buyer6;
 var mntContractAddress;
 var mntContract;
 
-var commonDataContractAddress;
-var commonDataContract;
+var coreContractAddress;
+var coreContract;
 
 var mraContractAddress;
 var mraContract;
@@ -37,7 +37,7 @@ var ether = 1000000000000000000;
 var initTotalTokenSupply = 0;
 var shareFeePercent = 0;    
 var refFeePercent = 0;  
-var devRewardPercent = 0;  
+var tokenOwnerRewardPercent = 0;  
 var priceSpeed = 0; 
 var startTokenPrice = 0;
 var totalTokenBalance = 0;
@@ -108,7 +108,7 @@ function getRandomInt(min, max) {
 }
 
 function getContractBalanceEth() {
-    return web3.eth.getBalance(mraContractAddress).add(web3.eth.getBalance(commonDataContractAddress));
+    return web3.eth.getBalance(mraContractAddress).add(web3.eth.getBalance(coreContractAddress));
 }
 
 eval(fs.readFileSync('./test/helpers/misc.js')+'');
@@ -151,7 +151,7 @@ describe('ETHERARAMA', function() {
           deployMntContract(data,function(err) {
                assert.equal(err,null);
 
-               deployEtheramaCommon(data, function(err) {
+               deployEtheramaCore(data, function(err) {
                     assert.equal(err,null);
 
                     deployEtheramaContract(data,function(err) {
@@ -168,7 +168,7 @@ describe('ETHERARAMA', function() {
 
     it('should set initial state', async() => {
 
-        await commonDataContract.addDataContract(mraContract.getDataContractAddress(), { from: creator });
+        await coreContract.addControllerContract(mraContractAddress, { from: creator });
 
         var mraContractTokenAmount = 2000000*ether;
 
@@ -211,11 +211,11 @@ describe('ETHERARAMA', function() {
 
         priceSpeed = (priceSpeedPercent / 100) / priceSpeedTokenBlock;
  
-        devRewardPercent = await mraContract.getDevRewardPercent().div(1e18);
+        tokenOwnerRewardPercent = await mraContract.getTokenOwnerRewardPercent().div(1e18);
         startTokenPrice = await mraContract.getTokenInitialPrice().div(1e18);
         
-        await commonDataContract.setBigPromoInterval(7, { from: creator });
-        await commonDataContract.setQuickPromoInterval(5, { from: creator });
+        await coreContract.setBigPromoInterval(7, { from: creator });
+        await coreContract.setQuickPromoInterval(5, { from: creator });
 
         bigPromoInterval = await mraContract.getBigPromoInterval();
         quickPromoInterval = await mraContract.getQuickPromoInterval();
@@ -223,14 +223,12 @@ describe('ETHERARAMA', function() {
         assert.equal(bigPromoInterval, 7);
         assert.equal(quickPromoInterval, 5);
 
-        promoMinPurchaseEth = await commonDataContract.getPromoMinPurchaseEth();
+        promoMinPurchaseEth = await coreContract.getPromoMinPurchaseEth();
         minRefTokenAmount = await mraContract.getMinRefTokenAmount();
 
         await mraContract.setActive(true, { from: creator });
 
         var remTime = await mraContract.getRemainingTimeTillExpiration();
-        console.log(remTime.toString(10));
-
     });
 
   /*  
@@ -355,9 +353,9 @@ describe('ETHERARAMA', function() {
 
             //console.log("expectedTokenPrice: " + expectedTokenPrice);
 
-            var estimatedDevReward = Math.floor((devRewardPercent.add(shareFeePercent).add(refFeePercent)) * totalPurchaseFee / 100);
-            //var estimatedDevReward = Math.floor((devRewardPercent) * totalPurchaseFee / 100);
-            var devReward1 = await mraContract.getDevReward();
+            var estimatedOwnerReward = Math.floor((tokenOwnerRewardPercent.add(shareFeePercent).add(refFeePercent)) * totalPurchaseFee / 100);
+            //var estimatedOwnerReward = Math.floor((tokenOwnerRewardPercent) * totalPurchaseFee / 100);
+            var tokenOwnerReward1 = await mraContract.getTokenOwnerReward();
         }
         
         await mraContract.buy(0x0, estimateTokenAmount, { from: buyer1, gas: 2900000, gasPrice: 15000000000, value: ethAmount });
@@ -369,8 +367,8 @@ describe('ETHERARAMA', function() {
             var mntpContractUserBalance2 = mntContract.balanceOf(buyer1);
             assert.equal(estimateTokenAmount.toString(10), (mntpContractUserBalance2.sub(mntpContractUserBalance1)).toString(10));
             
-            var devReward2 = await mraContract.getDevReward();
-            assert.equal(devReward2.sub(devReward1).toString(10), estimatedDevReward.toString(10));
+            var tokenOwnerReward2 = await mraContract.getTokenOwnerReward();
+            assert.equal(tokenOwnerReward2.sub(tokenOwnerReward1).toString(10), estimatedOwnerReward.toString(10));
 
 
             var ethContractBalance2 = getContractBalanceEth();
@@ -397,7 +395,6 @@ describe('ETHERARAMA', function() {
             
         }
     });
-
 
     it('should make a purchase behalf buyer1 2', async() => {
         {
@@ -430,9 +427,9 @@ describe('ETHERARAMA', function() {
 
             console.log("esitmatedShareReward: " + esitmatedShareReward);
 
-            var estimatedDevReward = Math.floor(devRewardPercent * totalPurchaseFee / 100);
-            //var estimatedDevReward = Math.floor((devRewardPercent) * totalPurchaseFee / 100);
-            var devReward1 = await mraContract.getDevReward();
+            var estimatedOwnerReward = Math.floor(tokenOwnerRewardPercent * totalPurchaseFee / 100);
+
+            var tokenOwnerReward1 = await mraContract.getTokenOwnerReward();
         }
         
         await mraContract.buy(0x0, estimateTokenAmount, { from: buyer1, gas: 2900000, gasPrice: 15000000000, value: ethAmount });
@@ -443,8 +440,8 @@ describe('ETHERARAMA', function() {
             var mntpContractUserBalance2 = mntContract.balanceOf(buyer1);
             assert.equal(estimateTokenAmount.toString(10), (mntpContractUserBalance2.sub(mntpContractUserBalance1)).toString(10));
             
-            var devReward2 = await mraContract.getDevReward();
-            assert.equal(devReward2.sub(devReward1).toString(10), estimatedDevReward.toString(10));
+            var tokenOwnerReward2 = await mraContract.getTokenOwnerReward();
+            assert.equal(tokenOwnerReward2.sub(tokenOwnerReward1).toString(10), estimatedOwnerReward.toString(10));
 
             var ethContractBalance2 = getContractBalanceEth();
             assert.equal((ethContractBalance2.sub(ethContractBalance1)).toString(10), ethAmount.toString(10));
@@ -468,6 +465,7 @@ describe('ETHERARAMA', function() {
 
         }
     });
+
 
     it('should make a purchase behalf buyer2', async() => {
 
@@ -498,8 +496,8 @@ describe('ETHERARAMA', function() {
             var buyer2TokenBalance = await mraContract.getUserLocalTokenBalance(buyer2);
             //console.log("buyer2TokenBalance: " + buyer2TokenBalance);
 
-            var estimatedDevReward = Math.floor(devRewardPercent * totalPurchaseFee / 100);
-            var devReward1 = await mraContract.getDevReward();
+            var estimatedOwnerReward = Math.floor(tokenOwnerRewardPercent * totalPurchaseFee / 100);
+            var tokenOwnerReward1 = await mraContract.getTokenOwnerReward();
             var totalShareReward = totalPurchaseFee * shareFeePercent / 100;
             var refReward = totalPurchaseFee * refFeePercent / 100;
             var totalTokenSold = await mraContract.getTotalTokenSold();
@@ -528,8 +526,8 @@ describe('ETHERARAMA', function() {
                 console.log("userReward1: " + userReward1.toString(10) + "; userReward2: " + userReward2.toString(10) + "; esitmatedShareRewardWithoutRefBuyer1: " + esitmatedShareRewardWithoutRefBuyer1.toString(10));
                 assert.equal(userReward2.sub(userReward1).sub(esitmatedShareRewardWithoutRefBuyer1).abs() < 200, true);
 
-                var devReward2 = await mraContract.getDevReward();
-                assert.equal(estimatedDevReward.toString(10), devReward2.sub(devReward1).toString(10));
+                var tokenOwnerReward2 = await mraContract.getTokenOwnerReward();
+                assert.equal(estimatedOwnerReward.toString(10), tokenOwnerReward2.sub(tokenOwnerReward1).toString(10));
 
                 var buyer2Reward2 = await mraContract.getCurrentUserReward(false, false, { from: buyer2 });
                 assert.equal(buyer2Reward2.sub(buyer2Reward1).toString(10), "0");
@@ -688,13 +686,13 @@ describe('ETHERARAMA', function() {
             var totalTokenSold = await mraContract.getTotalTokenSold();
             //console.log("totalShareReward: " + totalShareReward + "; totalTokenSold: " + totalTokenSold.toString(10));
 
-            var estimatedDevReward = Math.floor(devRewardPercent * estimatedTotalFee / 100);
+            var estimatedOwnerReward = Math.floor(tokenOwnerRewardPercent * estimatedTotalFee / 100);
 
 
             var buyer2EsitmatedShareReward = new BigNumber(Math.floor((totalShareReward / (totalTokenSold.sub(tokenAmount))) * buyer2TokenBalance).toString()); 
             var buyer1EsitmatedShareReward = new BigNumber(Math.floor((totalShareReward / (totalTokenSold.sub(tokenAmount))) * buyer1TokenBalance).toString()); 
 
-            var devReward1 = await mraContract.getDevReward();
+            var tokenOwnerReward1 = await mraContract.getTokenOwnerReward();
             
             var ethPowhContractBalance1 = getContractBalanceEth();
             var ethBuyer1Balance1 = web3.eth.getBalance(buyer1);
@@ -730,8 +728,8 @@ describe('ETHERARAMA', function() {
 
             assert.equal((mraContractUserBalance1.sub(mraContractUserBalance2)).toString(10), tokenAmount.toString(10));
 
-            var devReward2 = await mraContract.getDevReward();
-            assert.equal(estimatedDevReward.toString(10), devReward2.sub(devReward1).toString(10));    
+            var tokenOwnerReward2 = await mraContract.getTokenOwnerReward();
+            assert.equal(estimatedOwnerReward.toString(10), tokenOwnerReward2.sub(tokenOwnerReward1).toString(10));    
 
 
             var esitmatedShareRewardForSoldTokens = await mraContract.calcReward(tokenAmount);
@@ -865,6 +863,7 @@ describe('ETHERARAMA', function() {
         }
     });
 
+
     it('should reinvest reward', async() => {
 
         var ethAmount = 1 * ether;
@@ -922,17 +921,39 @@ describe('ETHERARAMA', function() {
     });
 
 
+    it('should withdraw token owner reward', async() => {
+
+        var tokenOwnerReward1 = await mraContract.getTokenOwnerReward({ from: creator });
+
+        var tokenOwnerEthBalance1 = web3.eth.getBalance(creator);
+        //console.log("tokenOwnerReward1: " + tokenOwnerReward1.toString(10));
+        //console.log("tokenOwnerEthBalance1: " + tokenOwnerEthBalance1.toString(10));
+
+        await mraContract.withdrawTokenOwnerReward({ from: creator });
+
+        var tokenOwnerReward2 = await mraContract.getTokenOwnerReward({ from: creator, gas: 2900000 });
+        assert.equal(tokenOwnerReward2.toString(10), "0");
+
+        var tokenOwnerEthBalance2 = web3.eth.getBalance(creator);
+
+        //console.log("tokenOwnerEthBalance2: " + tokenOwnerEthBalance2.toString(10));
+
+        assert(Math.abs(tokenOwnerEthBalance2.sub(tokenOwnerEthBalance1).sub(tokenOwnerReward1)) < 30000);
+
+    });
+
     it('should withdraw dev reward', async() => {
 
-        var devReward1 = await mraContract.getDevReward({ from: creator });
+        var devReward1 = await coreContract.getDevReward();
+        //console.log("devReward1: " + devReward1.toString(10));
+        assert(devReward1 > 0);
 
         var devEthBalance1 = web3.eth.getBalance(creator);
-        //console.log("devReward1: " + devReward1.toString(10));
         //console.log("devEthBalance1: " + devEthBalance1.toString(10));
 
-        await mraContract.withdrawDevReward(creator, { from: creator });
+        await coreContract.withdrawDevReward({ from: creator });
 
-        var devReward2 = await mraContract.getDevReward({ from: creator, gas: 2900000 });
+        var devReward2 = await coreContract.getDevReward();
         assert.equal(devReward2.toString(10), "0");
 
         var devEthBalance2 = web3.eth.getBalance(creator);
@@ -942,6 +963,7 @@ describe('ETHERARAMA', function() {
         assert(Math.abs(devEthBalance2.sub(devEthBalance1).sub(devReward1)) < 30000);
 
     });
+
 
     it('should test economy model', async() => {
 
@@ -1021,7 +1043,7 @@ describe('ETHERARAMA', function() {
 
             var totalBuyerReward = buyer1Reward1.add(buyer2Reward1).add(buyer3Reward1).add(buyer4Reward1);
 
-            var devReward = await mraContract.getDevReward();
+            var devReward = await mraContract.getTokenOwnerReward();
             var totalPromoReward = await mraContract.getTotalCollectedPromoBonus();
 
             var totalDiff = mraContractEthBalance.sub(devReward).sub(totalPromoReward).sub(totalBuyerReward);
@@ -1133,7 +1155,7 @@ describe('ETHERARAMA', function() {
 
 
 });
-
+return;
 describe('ETHERARAMA NEW CONTROLLER', function(){
 
     before("Initialize everything", function(done) {
@@ -1199,6 +1221,9 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
         await mraContract.setMigrationStatus(true, { from: creator, gas: 300000 });
         await mraContractOld.setNewControllerContractAddress(mraContractAddress, { from: creator, gas: 300000 });
         await mraContract.setMigrationStatus(false, { from: creator, gas: 300000 });
+
+        await coreContract.addControllerContract(mraContractAddress, { from: creator });
+        await coreContract.removeControllerContract(mraContractAddressOld, { from: creator });
 
 
         assert(await mraContract.getDataContractAddress(), await mraContractOld.getDataContractAddress());
