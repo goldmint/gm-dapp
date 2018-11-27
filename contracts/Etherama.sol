@@ -133,18 +133,18 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return _quickPromoBlockInterval;
     }
     
-    function addBigPromoBonus(uint256 val) onlyControllerContract public {
-        _currentBigPromoBonus = SafeMath.add(_currentBigPromoBonus, val);
-        addTotalCollectedPromoBonus(val);
+    function addBigPromoBonus() onlyControllerContract payable public {
+        _currentBigPromoBonus = SafeMath.add(_currentBigPromoBonus, msg.value);
+        addTotalCollectedPromoBonus(msg.value);
     }
     
     function getCurrentBigPromoBonus() public view returns (uint256) {
         return _currentBigPromoBonus;
     } 
     
-    function addQuickPromoBonus(uint256 val) onlyControllerContract public {
-        _currentQuickPromoBonus = SafeMath.add(_currentQuickPromoBonus, val);
-        addTotalCollectedPromoBonus(val);
+    function addQuickPromoBonus() onlyControllerContract payable public {
+        _currentQuickPromoBonus = SafeMath.add(_currentQuickPromoBonus, msg.value);
+        addTotalCollectedPromoBonus(msg.value);
     }
     
     function getCurrentQuickPromoBonus() public view returns (uint256) {
@@ -200,8 +200,8 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return _currentDevReward;
     }
 
-    function addDevReward(uint256 val) onlyControllerContract public {
-        _currentDevReward = SafeMath.add(_currentDevReward, val);
+    function addDevReward() onlyControllerContract payable public {
+        _currentDevReward = SafeMath.add(_currentDevReward, msg.value);
     }    
     
     function withdrawDevReward() onlyAdministrator public {
@@ -209,8 +209,7 @@ contract EtheramaCore is EtheramaGasPriceLimit {
 
         _currentDevReward = 0;
     }
-
-    function acceptTransferFee() onlyControllerContract payable public {}
+    
 }
 
 contract EtheramaData {
@@ -572,8 +571,6 @@ contract Etherama {
     bool public isMigrationToNewControllerInProgress = false;
 
     address private _creator = 0x0;
-
-    uint256 private _commonTotalFee = 0;
 
 
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
@@ -1145,15 +1142,12 @@ contract Etherama {
     }
 
     function distributeFee(uint256 totalFeeEth, address refAddress) internal {
-        _commonTotalFee = 0;
 
         addProfitPerShare(totalFeeEth, refAddress);
         addDevReward(totalFeeEth);
         addTokenOwnerReward(totalFeeEth);
         addBigPromoBonus(totalFeeEth);
         addQuickPromoBonus(totalFeeEth);
-
-        _core.acceptTransferFee.value(_commonTotalFee)();
     }
 
     function addProfitPerShare(uint256 totalFeeEth, address refAddress) internal {
@@ -1174,10 +1168,7 @@ contract Etherama {
     }
 
     function addDevReward(uint256 totalFeeEth) internal {
-        uint256 devReward = calcDevReward(totalFeeEth);
-        _core.addDevReward(devReward);
-
-        addCommonFee(devReward);
+        _core.addDevReward.value(calcDevReward(totalFeeEth))();
     }    
     
     function addTokenOwnerReward(uint256 totalFeeEth) internal {
@@ -1185,22 +1176,13 @@ contract Etherama {
     }  
 
     function addBigPromoBonus(uint256 totalFeeEth) internal {
-        uint256 bonus = calcBigPromoBonus(totalFeeEth);
-        _core.addBigPromoBonus(bonus);
-
-        addCommonFee(bonus);
+        _core.addBigPromoBonus.value(calcBigPromoBonus(totalFeeEth))();
     }
 
     function addQuickPromoBonus(uint256 totalFeeEth) internal {
-        uint256 bonus = calcQuickPromoBonus(totalFeeEth);
-        _core.addQuickPromoBonus(bonus);
-
-        addCommonFee(bonus);
+        _core.addQuickPromoBonus.value(calcQuickPromoBonus(totalFeeEth))();
     }   
 
-    function addCommonFee(uint256 val) internal {
-        _commonTotalFee = SafeMath.add(_commonTotalFee, val);
-    } 
 
     function addUserTokens(address user, uint256 tokenAmount) internal {
         _data.addUserTokenBalance(user, tokenAmount);
