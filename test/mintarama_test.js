@@ -226,7 +226,7 @@ describe('ETHERARAMA', function() {
         promoMinPurchaseEth = await coreContract.getPromoMinPurchaseEth();
         minRefTokenAmount = await mraContract.getMinRefTokenAmount();
 
-        await mraContract.setActive(true, { from: creator });
+        await mraContract.activate({ from: creator });
 
         var remTime = await mraContract.getRemainingTimeTillExpiration();
     });
@@ -432,7 +432,7 @@ describe('ETHERARAMA', function() {
             var tokenOwnerReward1 = await mraContract.getTokenOwnerReward();
         }
         
-        await mraContract.buy(0x0, estimateTokenAmount, { from: buyer1, gas: 2900000, gasPrice: 15000000000, value: ethAmount });
+        await mraContract.buy(0x0, estimateTokenAmount, { from: buyer1, gas: 400000, gasPrice: 15000000000, value: ethAmount });
         {
             var mraContractUserBalance2 = mraContract.getCurrentUserLocalTokenBalance({ from: buyer1 });
             assert.equal((mraContractUserBalance2.sub(mraContractUserBalance1)).toString(10), estimateTokenAmount.toString(10));
@@ -465,7 +465,6 @@ describe('ETHERARAMA', function() {
 
         }
     });
-
 
     it('should make a purchase behalf buyer2', async() => {
 

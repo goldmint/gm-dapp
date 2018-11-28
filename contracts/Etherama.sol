@@ -74,6 +74,14 @@ contract EtheramaGasPriceLimit is EtheramaCommon {
 
 contract EtheramaCore is EtheramaGasPriceLimit {
     
+    uint256 constant public MAGNITUDE = 2**64;
+
+    uint256 constant public MIN_TOKEN_DEAL_VAL = 0.1 ether;
+    uint256 constant public MAX_TOKEN_DEAL_VAL = 1000000 ether;
+
+    uint256 constant public MIN_ETH_DEAL_VAL = 0.001 ether;
+    uint256 constant public MAX_ETH_DEAL_VAL = 200000 ether;
+    
     uint256 private _bigPromoPercent = 5 ether;
     uint256 private _quickPromoPercent = 5 ether;
     uint256 private _devRewardPercent = 15 ether;
@@ -252,6 +260,8 @@ contract EtheramaData {
 
     uint256 private _buyCount;
     uint256 private _sellCount;
+    uint256 private _totalVolumeEth;
+    uint256 private _totalVolumeToken;
 
     uint256 private _initBlockNum;
     
@@ -534,12 +544,19 @@ contract EtheramaData {
         return _realTokenPrice;
     }
 
-    function incBuyCount() onlyController public {
+    function trackBuy(uint256 volEth, uint256 volToken) onlyController public {
         _buyCount = SafeMath.add(_buyCount, 1);
+        trackVolume(volEth, volToken);
     }
 
-    function incSellCount() onlyController public {
+    function trackSell(uint256 volEth, uint256 volToken) onlyController public {
         _sellCount = SafeMath.add(_sellCount, 1);
+        trackVolume(volEth, volToken);
+    }
+    
+    function trackVolume(uint256 volEth, uint256 volToken) internal {
+        _totalVolumeEth = SafeMath.add(_totalVolumeEth, volEth);
+        _totalVolumeToken = SafeMath.add(_totalVolumeToken, volToken);
     }
 
     function getBuyCount() public view returns(uint256) {
@@ -548,7 +565,15 @@ contract EtheramaData {
 
     function getSellCount() public view returns(uint256) {
         return _sellCount;
-    }        
+    }   
+    
+    function getTotalVolumeEth() public view returns(uint256) {
+        return _totalVolumeEth;
+    }   
+    
+    function getTotalVolumeToken() public view returns(uint256) {
+        return _totalVolumeToken;
+    } 
 }
 
 
@@ -558,20 +583,12 @@ contract Etherama {
     EtheramaData _data;
     EtheramaCore _core;
 
-    uint256 constant internal MAGNITUDE = 2**64;
 
-    uint256 constant internal MIN_TOKEN_DEAL_VAL = 0.1 ether;
-    uint256 constant internal MAX_TOKEN_DEAL_VAL = 1000000 ether;
-
-    uint256 constant internal MIN_ETH_DEAL_VAL = 0.001 ether;
-    uint256 constant internal MAX_ETH_DEAL_VAL = 200000 ether;
-
-    
     bool public isActive = false;
     bool public isMigrationToNewControllerInProgress = false;
 
     address private _creator = 0x0;
-
+    
 
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
     
@@ -662,12 +679,12 @@ contract Etherama {
         require(_data.getAdministratorCount() == 1);
     }
         
-    function setActive(bool val) onlyAdministrator public {
-        require(isActive != val);
+    function activate() onlyAdministrator public {
+        require(!isActive);
 
-        isActive = val;
+        isActive = true;
         
-        if (isActive && isMigrationToNewControllerInProgress) isMigrationToNewControllerInProgress = false;
+        isMigrationToNewControllerInProgress = false;
     }
     
     function finish() onlyAdministrator public {
@@ -700,7 +717,7 @@ contract Etherama {
 
         distributeFee(totalFeeEth, 0x0);
 
-        _data.incSellCount();
+        _data.trackSell(ethAmount, tokenAmount);
        
         onTokenSell(msg.sender, tokenAmount, ethAmount);
 
@@ -807,9 +824,17 @@ contract Etherama {
     function getSellCount() public view returns(uint256) {
         return _data.getSellCount();
     }
-
+    
+    function getTotalVolumeEth() public view returns(uint256) {
+        return _data.getTotalVolumeEth();
+    }   
+    
+    function getTotalVolumeToken() public view returns(uint256) {
+        return _data.getTotalVolumeToken();
+    } 
+    
     function getBonusPerShare() public view returns (uint256) {
-        return SafeMath.div(SafeMath.mul(_data.getBonusPerShare(), 1 ether), MAGNITUDE);
+        return SafeMath.div(SafeMath.mul(_data.getBonusPerShare(), 1 ether), _core.MAGNITUDE());
     }    
 
     function getTokenInitialPrice() public view returns(uint256) {
@@ -930,19 +955,19 @@ contract Etherama {
     }
     
     function getTokenDealRange() public view returns(uint256, uint256) {
-        return (MIN_TOKEN_DEAL_VAL, MAX_TOKEN_DEAL_VAL);
+        return (_core.MIN_TOKEN_DEAL_VAL(), _core.MAX_TOKEN_DEAL_VAL());
     }
 
     function getEthDealRange() public view returns(uint256, uint256) {
         uint256 minTokenVal; uint256 maxTokenVal;
         (minTokenVal, maxTokenVal) = getTokenDealRange();
         
-        return ( SafeMath.max(MIN_ETH_DEAL_VAL, tokensToEth(minTokenVal, true)), SafeMath.min(MAX_ETH_DEAL_VAL, tokensToEth(maxTokenVal, true)) );
+        return ( SafeMath.max(_core.MIN_ETH_DEAL_VAL(), tokensToEth(minTokenVal, true)), SafeMath.min(_core.MAX_ETH_DEAL_VAL(), tokensToEth(maxTokenVal, true)) );
     }
 
     function getUserReward(address userAddress, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
         uint256 reward = _data.getBonusPerShare() * getActualUserTokenBalance(userAddress);
-        reward = ((reward < _data.getUserRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, _data.getUserRewardPayouts(userAddress))) / MAGNITUDE;
+        reward = ((reward < _data.getUserRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, _data.getUserRewardPayouts(userAddress))) / _core.MAGNITUDE();
         
         if (incRefBonus) reward = SafeMath.add(reward, _data.getUserRefBalance(userAddress));
         if (incPromoBonus) reward = SafeMath.add(reward, _data.getUserTotalPromoBonus(userAddress));
@@ -969,7 +994,7 @@ contract Etherama {
     }
 
     function calcReward(uint256 tokenAmount) public view returns(uint256) {
-        return (uint256) ((int256)(_data.getBonusPerShare() * tokenAmount)) / MAGNITUDE;
+        return (uint256) ((int256)(_data.getBonusPerShare() * tokenAmount)) / _core.MAGNITUDE();
     }  
 
     function estimateBuyOrder(uint256 amount, bool fromEth) public view returns(uint256, uint256, uint256) {
@@ -1090,7 +1115,7 @@ contract Etherama {
         
         updateTokenPrice(convert256ToReal(tokenAmount));
         
-        _data.incBuyCount();
+        _data.trackBuy(ethAmount, tokenAmount);
 
         onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
@@ -1109,7 +1134,7 @@ contract Etherama {
         uint256 reward = getCurrentUserReward(false, false);
         
         // add share reward to payouts
-        _data.addUserRewardPayouts(msg.sender, reward * MAGNITUDE);
+        _data.addUserRewardPayouts(msg.sender, reward * _core.MAGNITUDE());
 
         // add ref bonus
         reward = SafeMath.add(reward, _data.getUserRefBalance(msg.sender));
@@ -1163,7 +1188,7 @@ contract Etherama {
         if (getTotalTokenSold() == 0) {
             _data.addTokenOwnerReward(totalShareReward);
         } else {
-            _data.addBonusPerShare((totalShareReward * MAGNITUDE) / getTotalTokenSold());
+            _data.addBonusPerShare((totalShareReward * _core.MAGNITUDE()) / getTotalTokenSold());
         }
     }
 
