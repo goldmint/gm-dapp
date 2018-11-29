@@ -660,9 +660,9 @@ function deployGoldContract(data,cb){
 }
 
 
-function deployEtheramaCommon(data, cb) {
+function deployEtheramaCore(data, cb) {
     var file = './contracts/Etherama.sol';
-    var contractName = ':EtheramaCommonData';
+    var contractName = ':EtheramaCore';
 
     fs.readFile(file, function(err, result){
         assert.equal(err,null);
@@ -706,11 +706,11 @@ function deployEtheramaCommon(data, cb) {
                         assert.equal(err, null);
                         assert.notEqual(result, null);
 
-                        commonDataContractAddress = result.contractAddress;
-                        commonDataContract = web3.eth.contract(abi).at(commonDataContractAddress);
+                        coreContractAddress = result.contractAddress;
+                        coreContract = web3.eth.contract(abi).at(coreContractAddress);
 
-                        console.log('EtheramaCommonData Contract address: ');
-                        console.log(commonDataContractAddress);
+                        console.log('Core Contract address: ');
+                        console.log(coreContractAddress);
 
                         if(!alreadyCalled){
                             alreadyCalled = true;
@@ -749,8 +749,8 @@ function deployEtheramaContract(data,cb){
           tempContract.new(
                mntContractAddress,
                dataContractAddress,
-               commonDataContractAddress,
-               1,
+               coreContractAddress,
+               1,5,10000,
                {
                     from: creator, 
                     // should not exceed 5000000 for Kovan by default
