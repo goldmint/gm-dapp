@@ -265,6 +265,8 @@ contract EtheramaData {
 
     uint256 private _initBlockNum;
     
+    bool private _hasMaxPurchaseLimit = true;
+    
     IStdToken _token;
 
     //only main contract
@@ -574,6 +576,14 @@ contract EtheramaData {
     function getTotalVolumeToken() public view returns(uint256) {
         return _totalVolumeToken;
     } 
+    
+    function getHasMaxPurchaseLimit() public view returns(bool) {
+        return _hasMaxPurchaseLimit;
+    }
+    
+    function setHasMaxPurchaseLimit(bool val) onlyController public {
+        _hasMaxPurchaseLimit = val;
+    }
 }
 
 
@@ -678,12 +688,18 @@ contract Etherama {
 
         require(_data.getAdministratorCount() == 1);
     }
+    
+    function setHasMaxPurchaseLimit(bool val) onlyAdministrator public {
+        _data.setHasMaxPurchaseLimit(val);
+    }
         
     function activate() onlyAdministrator public {
         require(!isActive);
-
-        isActive = true;
         
+        if (getTotalTokenSupply() == 0) setTotalSupply();
+        require(getTotalTokenSupply() > 0);
+        
+        isActive = true;
         isMigrationToNewControllerInProgress = false;
     }
     
@@ -954,6 +970,18 @@ contract Etherama {
         return getUserReward(msg.sender, incRefBonus, incPromoBonus);
     }
     
+    function getCurrentUserShareReward() public view returns(uint256) {
+        return getUserReward(msg.sender, false, false);
+    }
+    
+    function getCurrentUserRefBonus() public view returns(uint256) {
+        return _data.getUserRefBalance(msg.sender);
+    }
+    
+    function getCurrentUserPromoBonus() public view returns(uint256) {
+        return _data.getUserTotalPromoBonus(msg.sender);
+    }
+    
     function getTokenDealRange() public view returns(uint256, uint256) {
         return (_core.MIN_TOKEN_DEAL_VAL(), _core.MAX_TOKEN_DEAL_VAL());
     }
@@ -1009,7 +1037,7 @@ contract Etherama {
         uint256 totalFeeEth = calcTotalFee(tokenAmount, true);
         require(ethAmount > totalFeeEth);
 
-        uint256 tokenPrice = SafeMath.div(tokenAmount * 1 ether, tokenAmount);
+        uint256 tokenPrice = SafeMath.div(ethAmount * 1 ether, tokenAmount);
 
         return (fromEth ? tokenAmount : SafeMath.add(ethAmount, totalFeeEth), totalFeeEth, tokenPrice);
     }
@@ -1055,10 +1083,6 @@ contract Etherama {
     function getCurrentUserQuickPromoBonus() public view returns(uint256) {
         return _data.getUserQuickPromoBonus(msg.sender);
     }
-
-    function getCurrentUserRefBonus() public view returns(uint256) {
-        return _data.getUserRefBalance(msg.sender);
-    }
    
     function getBlockNumSinceInit() public view returns(uint256) {
         return block.number - _data.getCommonInitBlockNum();
@@ -1091,14 +1115,14 @@ contract Etherama {
     // INTERNAL FUNCTIONS
     
     function purchaseTokens(uint256 ethAmount, address refAddress, uint256 minReturn) internal returns(uint256) {
-        if (getTotalTokenSupply() == 0) setTotalSupply();
-
         uint256 tokenAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
         (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount, true);
         require(tokenAmount >= minReturn);
 
-        //user has to have at least equal amount of tokens which he's willing to buy 
-        require(getCurrentUserMaxPurchase() >= tokenAmount);
+        if (_data.getHasMaxPurchaseLimit()) {
+            //user has to have at least equal amount of tokens which he's willing to buy 
+            require(getCurrentUserMaxPurchase() >= tokenAmount);
+        }
 
         require(tokenAmount > 0 && (SafeMath.add(tokenAmount, getTotalTokenSold()) > getTotalTokenSold()));
 
