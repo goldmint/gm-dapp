@@ -1,7 +1,7 @@
 pragma solidity ^0.4.18;
 
 contract IStdToken {
-    function balanceOf(address _owner) public constant returns (uint256);
+    function balanceOf(address _owner) public view returns (uint256);
     function transfer(address _to, uint256 _value) public returns (bool);
     function transferFrom(address _from, address _to, uint256 _value) public returns(bool);
 }
@@ -596,6 +596,7 @@ contract Etherama {
 
     bool public isActive = false;
     bool public isMigrationToNewControllerInProgress = false;
+    bool public isActualContractVer = true;
 
     address private _creator = 0x0;
     
@@ -819,7 +820,7 @@ contract Etherama {
     
     //set new controller address in case of some mistake in the contract and transfer there all the tokens and eth.
     function setNewControllerContractAddress(address newControllerAddr) onlyAdministrator public {
-        require(newControllerAddr != 0x0);
+        require(newControllerAddr != 0x0 && isActualContractVer);
 
         isActive = false;
 
@@ -831,6 +832,8 @@ contract Etherama {
 
         if (remainingTokenAmount > 0) _token.transfer(newControllerAddr, remainingTokenAmount); 
         if (ethBalance > 0) newController.activateNewController.value(ethBalance)();
+        
+        isActualContractVer = false;
     }
 
     function getBuyCount() public view returns(uint256) {

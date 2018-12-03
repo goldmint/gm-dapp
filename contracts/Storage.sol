@@ -572,7 +572,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         RequestCancelled(_index);
     }
 
-    function processRequest(uint _index, uint _weiPerGold) onlyManagerOrCreator public returns(bool) {
+    function processRequest(uint _index, uint _weiPerGold, uint _discountPercent) onlyManagerOrCreator public returns(bool) {
         require(_index < getRequestsCount());
 
         address sender;
@@ -589,7 +589,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         uint outputAmount = 0;
 
         if (isBuy) {
-            (processResult, outputAmount) = processBuyRequest(userId, sender, inputAmount, _weiPerGold, false);
+            (processResult, outputAmount) = processBuyRequest(userId, sender, inputAmount, _weiPerGold, false, _discountPercent);
         } else {
             (processResult, outputAmount) = processSellRequest(userId, sender, inputAmount, _weiPerGold, false);
         }
@@ -612,7 +612,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
       bool processResult = false;
       uint outputAmount = 0;
         
-      (processResult, outputAmount) = processBuyRequest(_userId, _userAddress, _amountCents * 1 ether, _centsPerGold * 1 ether, true);
+      (processResult, outputAmount) = processBuyRequest(_userId, _userAddress, _amountCents * 1 ether, _centsPerGold * 1 ether, true, 0);
 
       if (processResult) {
         stor.setRequestProcessed(reqIndex, outputAmount);
@@ -658,7 +658,7 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         return true;
     }
 
-    function processBuyRequest(string _userId, address _userAddress, uint _amountWei, uint _weiPerGold, bool _isFiat) internal returns(bool, uint) {
+    function processBuyRequest(string _userId, address _userAddress, uint _amountWei, uint _weiPerGold, bool _isFiat, uint _discountPercent) internal returns(bool, uint) {
         require(keccak256(_userId) != keccak256(""));
 
         uint userMntpBalance = mntpToken.balanceOf(_userAddress);
@@ -674,6 +674,9 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
         require(amountWeiMinusFee > 0);
 
         uint tokensWei = safeDiv(uint(amountWeiMinusFee) * 1 ether, _weiPerGold);
+        
+        //discount
+        tokensWei = SafeMath.safeAdd(tokensWei, calcPercent(tokensWei, _discountPercent));
 
         issueGoldTokens(_userAddress, tokensWei);
 
@@ -724,9 +727,9 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
 
     //////// INTERNAL REQUESTS FROM HOT WALLET
-    function processInternalRequest(string _userId, bool _isBuy, uint _amountCents, uint _centsPerGold) onlyManagerOrCreator public {
+    function processInternalRequest(string _userId, bool _isBuy, uint _amountCents, uint _centsPerGold, uint _discountPercent) onlyManagerOrCreator public {
       if (_isBuy) {
-          processBuyRequest(_userId, getHotWalletAddress(), _amountCents, _centsPerGold, true);
+          processBuyRequest(_userId, getHotWalletAddress(), _amountCents, _centsPerGold, true, _discountPercent);
       } else {
           processSellRequest(_userId, getHotWalletAddress(), _amountCents, _centsPerGold, true);
       }
@@ -772,6 +775,10 @@ contract StorageController is SafeMath, CreatorEnabled, StringMover {
 
     function isHotWallet(address _address) internal returns(bool) {
        return _address == getHotWalletAddress();
+    }
+    
+    function calcPercent(uint256 amount, uint256 percent) public pure returns(uint256) {
+        return SafeMath.safeDiv(SafeMath.safeMul(SafeMath.safeDiv(amount, 100), percent), 1 ether);
     }
 
          // Default fallback function

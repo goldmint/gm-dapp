@@ -145,7 +145,7 @@ describe('ETH_REQ 1', function() {
 
      it('should process buy request', function(done){
 
-         storageControllerContract.processRequest(0, 2000000000000000000,
+         storageControllerContract.processRequest(0, 2000000000000000000, 0,
             {
                   from: creator,               
                   gas: 2900000000
@@ -217,7 +217,7 @@ describe('ETH_REQ 1', function() {
 
             var requiredAmountWei = (amountTokenWeiToSell * (1-commissionPercent)) * ethPerTokenRate / 1000000000000000000;
 
-            storageControllerContract.processRequest(1, ethPerTokenRate,
+            storageControllerContract.processRequest(1, ethPerTokenRate, 0,
                   {
                         from: creator,               
                         gas: 2900000000
@@ -423,7 +423,7 @@ describe('ETH_REQ 1', function() {
             });
 
 
-      })
+      });
 
       it('should add funds to storage controller contract', function(done){
 
@@ -438,5 +438,48 @@ describe('ETH_REQ 1', function() {
                  done();
            })
  
-      })
+      });
+
+
+      it('should add buy request 3', function(done){
+
+            var amount = 500000000000000000;
+
+            var balanceBefore = web3.eth.getBalance(storageControllerContractAddress);
+
+            storageControllerContract.addBuyTokensRequest("2", 2,
+            {
+                  from: buyer2,               
+                  gas: 2900000000,
+                  value: amount
+            },function(err,res){
+                  assert.equal(err,null);
+                                    
+                  var balanceAfter = web3.eth.getBalance(storageControllerContractAddress);
+                  
+                  assert.equal((balanceAfter - balanceBefore).toString(10),amount.toString(10));
+                  
+                  done();
+            });
+      });  
+
+      it('should process buy request 3 with 10% discount', function(done){
+
+            var buyerBalance1 = goldContract.balanceOf(buyer2);
+            var reqIndex = storageControllerContract.getRequestsCount() - 1;
+
+            storageControllerContract.processRequest(reqIndex, 2000000000000000000, 10 * 1e18,
+               {
+                     from: creator,               
+                     gas: 2900000000
+               },function(err,res){
+                     assert.equal(err,null);
+   
+                     var buyerBalance2 = goldContract.balanceOf(buyer2);
+   
+                     assert(buyerBalance2.sub(buyerBalance1).sub(new BigNumber((250000000000000000 * 1.1).toString())).abs() < 100);
+   
+                     done();
+               });
+        });
 });

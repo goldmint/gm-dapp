@@ -1154,7 +1154,7 @@ describe('ETHERARAMA', function() {
 
 
 });
-return;
+
 describe('ETHERARAMA NEW CONTROLLER', function(){
 
     before("Initialize everything", function(done) {
@@ -1260,7 +1260,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
 
     it('should activate new controller', async() => {
 
-        await mraContract.setActive(true, { from: creator });
+        await mraContract.activate({ from: creator });
 
         await web3.eth.sendTransaction({ from: buyer1, to: mraContractAddress, value: 0.1 * ether, gas: 2900000 });
 
