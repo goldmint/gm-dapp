@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.24;
 
 contract IStdToken {
     function balanceOf(address _owner) public view returns (uint256);
@@ -8,40 +8,40 @@ contract IStdToken {
 
 contract EtheramaCommon {
     
-    mapping(bytes32 => bool) private _administrators;
+    mapping(address => bool) private _administrators;
 
-    mapping(bytes32 => bool) private _managers;
+    mapping(address => bool) private _managers;
 
     
     modifier onlyAdministrator() {
-        require(_administrators[keccak256(msg.sender)]);
+        require(_administrators[msg.sender]);
         _;
     }
 
     modifier onlyAdministratorOrManager() {
-        require(_administrators[keccak256(msg.sender)] || _managers[keccak256(msg.sender)]);
+        require(_administrators[msg.sender] || _managers[msg.sender]);
         _;
     }
     
-    function EtheramaCommon() public {
-        _administrators[keccak256(msg.sender)] = true;
+    constructor() public {
+        _administrators[msg.sender] = true;
     }
     
     
     function addAdministator(address addr) onlyAdministrator public {
-        _administrators[keccak256(addr)] = true;
+        _administrators[addr] = true;
     }
 
     function removeAdministator(address addr) onlyAdministrator public {
-        _administrators[keccak256(addr)] = false;
+        _administrators[addr] = false;
     }
 
     function addManager(address addr) onlyAdministrator public {
-        _managers[keccak256(addr)] = true;
+        _managers[addr] = true;
     }
 
     function removeManager(address addr) onlyAdministrator public {
-        _managers[keccak256(addr)] = false;
+        _managers[addr] = false;
     }
 }
 
@@ -57,7 +57,7 @@ contract EtheramaGasPriceLimit is EtheramaCommon {
         _;
     }
     
-    function EtheramaGasPriceLimit(uint256 maxGasPrice) public validGasPrice(maxGasPrice) {
+    constructor(uint256 maxGasPrice) public validGasPrice(maxGasPrice) {
         setMaxGasPrice(maxGasPrice);
     } 
     
@@ -68,7 +68,7 @@ contract EtheramaGasPriceLimit is EtheramaCommon {
     function setMaxGasPrice(uint256 val) public validGasPrice(val) onlyAdministratorOrManager {
         MAX_GAS_PRICE = val;
         
-        onSetMaxGasPrice(val);
+        emit onSetMaxGasPrice(val);
     }
 }
 
@@ -108,7 +108,7 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         _;
     }
     
-    function EtheramaCore(uint256 maxGasPrice) EtheramaGasPriceLimit(maxGasPrice) public { 
+    constructor(uint256 maxGasPrice) EtheramaGasPriceLimit(maxGasPrice) public { 
          _initBlockNum = block.number;
     }
     
@@ -240,7 +240,7 @@ contract EtheramaData {
     mapping(address => uint256) private _promoQuickBonuses;
     mapping(address => uint256) private _promoBigBonuses;
 
-    mapping(bytes32 => bool) private _administrators;
+    mapping(address => bool) private _administrators;
     uint256 private  _administratorCount;
 
 
@@ -275,7 +275,7 @@ contract EtheramaData {
         _;
     }
 
-    function EtheramaData(address coreAddress) public {
+    constructor(address coreAddress) public {
         require(coreAddress != 0x0);
 
         _controllerAddress = msg.sender;
@@ -385,12 +385,12 @@ contract EtheramaData {
 
     
     function addAdministator(address addr) onlyController public {
-        _administrators[keccak256(addr)] = true;
+        _administrators[addr] = true;
         _administratorCount = SafeMath.add(_administratorCount, 1);
     }
 
     function removeAdministator(address addr) onlyController public {
-        _administrators[keccak256(addr)] = false;
+        _administrators[addr] = false;
         _administratorCount = SafeMath.sub(_administratorCount, 1);
     }
 
@@ -399,7 +399,7 @@ contract EtheramaData {
     }
     
     function isAdministrator(address addr) public view returns(bool) {
-        return _administrators[keccak256(addr)];
+        return _administrators[addr];
     }
 
     function setTotalIncomeFeePercent(uint256 val) onlyController public {
@@ -656,7 +656,7 @@ contract Etherama {
         _;
     }
 
-    function Etherama(address tokenContractAddress, address dataContractAddress, address coreAddress, 
+    constructor(address tokenContractAddress, address dataContractAddress, address coreAddress, 
         uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedBlocks) public {
         _data = dataContractAddress != 0x0 ? EtheramaData(dataContractAddress) : new EtheramaData(coreAddress);
         
@@ -736,7 +736,7 @@ contract Etherama {
 
         _data.trackSell(ethAmount, tokenAmount);
        
-        onTokenSell(msg.sender, tokenAmount, ethAmount);
+        emit onTokenSell(msg.sender, tokenAmount, ethAmount);
 
         return ethAmount;
     }   
@@ -753,7 +753,7 @@ contract Etherama {
 
         uint256 tokens = purchaseTokens(reward, 0x0, 0);
         
-        onReinvestment(msg.sender, reward, tokens);
+        emit onReinvestment(msg.sender, reward, tokens);
     }
 
      //Withdraws all of the callers earnings.
@@ -762,7 +762,7 @@ contract Etherama {
         
         msg.sender.transfer(reward);
         
-        onWithdraw(msg.sender, reward);
+        emit onWithdraw(msg.sender, reward);
     }
 
     function withdrawTokenOwnerReward() onlyAdministrator public {
@@ -774,7 +774,7 @@ contract Etherama {
 
         msg.sender.transfer(reward);
 
-        onWithdrawTokenOwnerReward(msg.sender, reward);
+        emit onWithdrawTokenOwnerReward(msg.sender, reward);
     }
 
     function setMigrationStatus(bool val) onlyAdministrator public {
@@ -934,7 +934,7 @@ contract Etherama {
     }
 
     function getTotalEthBalance() public view returns(uint256) {
-        return this.balance;
+        return address(this).balance;
     }
     
     function getTotalTokenSupply() public view returns(uint256) {
@@ -1144,7 +1144,7 @@ contract Etherama {
         
         _data.trackBuy(ethAmount, tokenAmount);
 
-        onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
+        emit onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
         return tokenAmount;
     }
@@ -1184,13 +1184,13 @@ contract Etherama {
     function sendQuickPromoBonus() internal {
         _core.transferQuickBonus(msg.sender);
 
-        onWinQuickPromo(msg.sender, _data.getCurrentQuickPromoBonus());
+        emit onWinQuickPromo(msg.sender, _data.getCurrentQuickPromoBonus());
     }
 
     function sendBigPromoBonus() internal {
         _core.transferBigBonus(msg.sender);
 
-        onWinBigPromo(msg.sender, _data.getCurrentBigPromoBonus());
+        emit onWinBigPromo(msg.sender, _data.getCurrentBigPromoBonus());
     }
 
     function distributeFee(uint256 totalFeeEth, address refAddress) internal {
