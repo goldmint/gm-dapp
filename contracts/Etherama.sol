@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.4.25;
 
 contract IStdToken {
     function balanceOf(address _owner) public view returns (uint256);
@@ -254,7 +254,7 @@ contract EtheramaData {
     uint256 private _totalSupply;
     int128 private _realTokenPrice;
 
-    address private _controllerAddress = 0x0;
+    address private _controllerAddress = address(0x0);
 
     EtheramaCore private _core;
 
@@ -276,7 +276,7 @@ contract EtheramaData {
     }
 
     constructor(address coreAddress) public {
-        require(coreAddress != 0x0);
+        require(coreAddress != address(0x0));
 
         _controllerAddress = msg.sender;
         _core = EtheramaCore(coreAddress);
@@ -284,7 +284,7 @@ contract EtheramaData {
     }
     
     function init(address tokenContractAddress, uint64 expPeriodDays, int128 initRealTokenPrice, uint64 priceSpeedPercent, uint64 priceSpeedBlocks) onlyController public {
-        require(tokenContractAddress != 0x0);
+        require(tokenContractAddress != address(0x0));
         require(expPeriodDays > 0);
         require(priceSpeedPercent > 0);
         require(priceSpeedBlocks > 0);
@@ -598,7 +598,7 @@ contract Etherama {
     bool public isMigrationToNewControllerInProgress = false;
     bool public isActualContractVer = true;
 
-    address private _creator = 0x0;
+    address private _creator = address(0x0);
     
 
     event onTokenPurchase(address indexed userAddress, uint256 incomingEth, uint256 tokensMinted, address indexed referredBy);
@@ -658,9 +658,9 @@ contract Etherama {
 
     constructor(address tokenContractAddress, address dataContractAddress, address coreAddress, 
         uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedBlocks) public {
-        _data = dataContractAddress != 0x0 ? EtheramaData(dataContractAddress) : new EtheramaData(coreAddress);
+        _data = dataContractAddress != address(0x0) ? EtheramaData(dataContractAddress) : new EtheramaData(coreAddress);
         
-        if (dataContractAddress == 0x0) {
+        if (dataContractAddress == address(0x0)) {
             _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.getTokenInitialPrice()), priceSpeedPercent, priceSpeedBlocks);
             _data.addAdministator(msg.sender);
             _creator = msg.sender;
@@ -683,7 +683,7 @@ contract Etherama {
     }
 
     function acceptOwnership() onlyAdministrator public {
-        require(_creator != 0x0);
+        require(_creator != address(0x0));
 
         removeAdministator(_creator);
 
@@ -720,7 +720,7 @@ contract Etherama {
 
     //sell tokens for eth
     function sell(uint256 tokenAmount, uint256 minReturn) onlyActive onlyContractUsers validGasPrice public returns(uint256) {
-        if (tokenAmount > getCurrentUserLocalTokenBalance() || tokenAmount == 0) return;
+        if (tokenAmount > getCurrentUserLocalTokenBalance() || tokenAmount == 0) return 0;
 
         uint256 ethAmount = 0; uint256 totalFeeEth = 0; uint256 tokenPrice = 0;
         (ethAmount, totalFeeEth, tokenPrice) = estimateSellOrder(tokenAmount, true);
@@ -732,7 +732,7 @@ contract Etherama {
 
         updateTokenPrice(-convert256ToReal(tokenAmount));
 
-        distributeFee(totalFeeEth, 0x0);
+        distributeFee(totalFeeEth, address(0x0));
 
         _data.trackSell(ethAmount, tokenAmount);
        
@@ -743,15 +743,15 @@ contract Etherama {
 
 
     //Fallback function to handle ethereum that was send straight to the contract
-    function() onlyActive validGasPrice payable public {
-        purchaseTokens(msg.value, 0x0, 1);
+    function() onlyActive validGasPrice payable external {
+        purchaseTokens(msg.value, address(0x0), 1);
     }
 
     //Converts all of caller's reward to tokens.
     function reinvest() onlyActive onlyRewardOwners validGasPrice public {
         uint256 reward = getRewardAndPrepareWithdraw();
 
-        uint256 tokens = purchaseTokens(reward, 0x0, 0);
+        uint256 tokens = purchaseTokens(reward, address(0x0), 0);
         
         emit onReinvestment(msg.sender, reward, tokens);
     }
@@ -820,11 +820,11 @@ contract Etherama {
     
     //set new controller address in case of some mistake in the contract and transfer there all the tokens and eth.
     function setNewControllerContractAddress(address newControllerAddr) onlyAdministrator public {
-        require(newControllerAddr != 0x0 && isActualContractVer);
+        require(newControllerAddr != address(0x0) && isActualContractVer);
 
         isActive = false;
 
-        Etherama newController = Etherama(newControllerAddr);
+        Etherama newController = Etherama(address(newControllerAddr));
         _data.setNewControllerAddress(newControllerAddr);
 
         uint256 remainingTokenAmount = getRemainingTokenAmount();
@@ -1129,7 +1129,7 @@ contract Etherama {
 
         require(tokenAmount > 0 && (SafeMath.add(tokenAmount, getTotalTokenSold()) > getTotalTokenSold()));
 
-        if (refAddress == msg.sender || !isRefAvailable(refAddress)) refAddress = 0x0;
+        if (refAddress == msg.sender || !isRefAvailable(refAddress)) refAddress = address(0x0);
 
         distributeFee(totalFeeEth, refAddress);
 
@@ -1206,7 +1206,7 @@ contract Etherama {
         uint256 refBonus = calcRefBonus(totalFeeEth);
         uint256 totalShareReward = calcTotalShareRewardFee(totalFeeEth);
 
-        if (refAddress != 0x0) {
+        if (refAddress != address(0x0)) {
             _data.addUserRefBalance(refAddress, refBonus);
         } else {
             totalShareReward = SafeMath.add(totalShareReward, refBonus);

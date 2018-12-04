@@ -34,7 +34,7 @@ function deployMntContract(data,cb){
 
           assert.equal(err,null);
 
-          var output = solc.compile(source, 0); // 1 activates the optimiser
+          var output = solc.compile(source, 1); // 1 activates the optimiser
 
           //console.log('OUTPUT: ');
           //console.log(output.contracts);
