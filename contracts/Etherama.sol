@@ -757,7 +757,7 @@ contract Etherama {
     }
 
      //Withdraws all of the callers earnings.
-    function withdraw() onlyActive onlyRewardOwners public {
+    function withdraw() onlyRewardOwners public {
         uint256 reward = getRewardAndPrepareWithdraw();
         
         msg.sender.transfer(reward);

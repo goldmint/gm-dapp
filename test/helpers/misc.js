@@ -684,7 +684,7 @@ function deployEtheramaCore(data, cb) {
         var alreadyCalled = false;
 
         tempContract.new(
-            15000000000,
+            35000000000,
             {
                 from: creator, 
                 // should not exceed 5000000 for Kovan by default
@@ -722,10 +722,9 @@ function deployEtheramaCore(data, cb) {
     });    
 }
 
-
-function deployEtheramaContract(data,cb){
+function deployEtheramaDataContract(data,cb){
      var file = './contracts/Etherama.sol';
-     var contractName = ':Etherama';
+     var contractName = ':EtheramaData';
 
      fs.readFile(file, function(err, result){
           assert.equal(err,null);
@@ -747,6 +746,68 @@ function deployEtheramaContract(data,cb){
           var alreadyCalled = false;
 
           tempContract.new(
+               coreContractAddress,
+               {
+                    from: creator, 
+                    // should not exceed 5000000 for Kovan by default
+                    gas: 1000000000,
+                    data: '0x' + bytecode
+               }, 
+               function(err, c){
+                    assert.equal(err, null);
+
+                    console.log('TX HASH: ');
+                    console.log(c.transactionHash);
+
+                    // TX can be processed in 1 minute or in 30 minutes...
+                    // So we can not be sure on this -> result can be null.
+                    web3.eth.getTransactionReceipt(c.transactionHash, function(err, result){
+                         //console.log('RESULT: ');
+                         //console.log(result);
+
+                         assert.equal(err, null);
+                         assert.notEqual(result, null);
+
+                         dataContractAddress = result.contractAddress;
+                         dataContract = web3.eth.contract(abi).at(dataContractAddress);
+
+                         console.log('Goldmint Etherama Data Contract address: ');
+                         console.log(dataContractAddress);
+
+                         if(!alreadyCalled){
+                              alreadyCalled = true;
+
+                              return cb(null);
+                         }
+                    });
+               });
+     });
+}
+
+function deployEtheramaContract(data,cb){
+     var file = './contracts/Etherama.sol';
+     var contractName = ':Etherama';
+
+     fs.readFile(file, function(err, result){
+          assert.equal(err,null);
+
+          var source = result.toString();
+          assert.notEqual(source.length,0);
+
+          assert.equal(err,null);
+
+          var output = solc.compile(source, 1); // 1 activates the optimiser
+
+          //console.log('OUTPUT: ');
+          //console.log(output.contracts);
+
+          var abi = JSON.parse(output.contracts[contractName].interface);
+          var bytecode = output.contracts[contractName].bytecode;
+          var tempContract = web3.eth.contract(abi);
+
+          var alreadyCalled = false;
+
+          tempContract.new(
                mntContractAddress,
                dataContractAddress,
                coreContractAddress,
@@ -754,7 +815,7 @@ function deployEtheramaContract(data,cb){
                {
                     from: creator, 
                     // should not exceed 5000000 for Kovan by default
-                    gas: 49950000,
+                    gas: 1000000000,
                     data: '0x' + bytecode
                }, 
                function(err, c){
@@ -775,7 +836,7 @@ function deployEtheramaContract(data,cb){
                          mraContractAddress = result.contractAddress;
                          mraContract = web3.eth.contract(abi).at(mraContractAddress);
 
-                         console.log('Goldmint Mintarama Contract address: ');
+                         console.log('Goldmint Etherama Contract address: ');
                          console.log(mraContractAddress);
 
                          if(!alreadyCalled){
