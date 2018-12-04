@@ -91,34 +91,33 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     uint256 constant public MAX_ETH_DEAL_VAL = 200000 ether;
     
     // percent of a transaction commission which is taken for Big Promo bonus
-    uint256 private _bigPromoPercent = 5 ether;
+    uint256 public _bigPromoPercent = 5 ether;
 
     // percent of a transaction commission which is taken for Quick Promo bonus
-    uint256 private _quickPromoPercent = 5 ether;
+    uint256 public _quickPromoPercent = 5 ether;
 
     // percent of a transaction commission which is taken for Etherama DEV team
-    uint256 private _devRewardPercent = 15 ether;
+    uint256 public _devRewardPercent = 15 ether;
     
 
     // interval of blocks for Big Promo bonus. It means that a user which buy a bunch of tokens for X ETH in that particular block will receive a special bonus 
-    uint128 private _bigPromoBlockInterval = 9999;
+    uint128 public _bigPromoBlockInterval = 9999;
 
     // same same for Quick Promo
-    uint128 private _quickPromoBlockInterval = 100;
+    uint128 public _quickPromoBlockInterval = 100;
 
-    uint256 private _currentBigPromoBonus;
-    uint256 private _currentQuickPromoBonus;
-    uint256 private _totalCollectedPromoBonus;
+    uint256 public _currentBigPromoBonus;
+    uint256 public _currentQuickPromoBonus;
+    uint256 public _totalCollectedPromoBonus;
     
-    uint256 private _currentDevReward;
+    uint256 public _devReward;
 
-    uint256 private _promoMinPurchaseEth = 1 ether;
+    uint256 public _promoMinPurchaseEth = 1 ether;
     
+    uint256 public _initBlockNum;
+
     mapping(address => bool) private _controllerContracts;
-    
-    uint256 private _initBlockNum;
 
-    
     modifier onlyControllerContract() {
         require(_controllerContracts[msg.sender]);
         _;
@@ -144,17 +143,9 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     function setBigPromoInterval(uint128 val) onlyAdministrator public {
         _bigPromoBlockInterval = val;
     }
-    
-    function getBigPromoInterval() public view returns(uint256) {
-        return _bigPromoBlockInterval;
-    }
 
     function setQuickPromoInterval(uint128 val) onlyAdministrator public {
         _quickPromoBlockInterval = val;
-    }
-    
-    function getQuickPromoInterval() public view returns(uint256) {
-        return _quickPromoBlockInterval;
     }
     
     function addBigPromoBonus() onlyControllerContract payable public {
@@ -162,101 +153,68 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         addTotalCollectedPromoBonus(msg.value);
     }
     
-    function getCurrentBigPromoBonus() public view returns (uint256) {
-        return _currentBigPromoBonus;
-    } 
-    
     function addQuickPromoBonus() onlyControllerContract payable public {
         _currentQuickPromoBonus = SafeMath.add(_currentQuickPromoBonus, msg.value);
         addTotalCollectedPromoBonus(msg.value);
     }
-    
-    function getCurrentQuickPromoBonus() public view returns (uint256) {
-        return _currentQuickPromoBonus;
-    } 
     
     
     function addTotalCollectedPromoBonus(uint256 val) internal {
         _totalCollectedPromoBonus = SafeMath.add(_totalCollectedPromoBonus, val);
     }
     
-    function getTotalCollectedPromoBonus() public view returns (uint256) {
-        return _totalCollectedPromoBonus;
-    }    
-
-
-    function getBigPromoPercent() public view returns(uint256) {
-        return _bigPromoPercent;
-    }
-    
-    function getQuickPromoPercent() public view returns(uint256) {
-        return _quickPromoPercent;
-    }
-    
-    function getDevRewardPercent() public view returns(uint256) {
-        return _devRewardPercent;
-    }    
 
     function setPromoMinPurchaseEth(uint256 val) onlyAdministrator public {
         _promoMinPurchaseEth = val;
     }
     
-    function getPromoMinPurchaseEth() public view returns(uint256) {
-        return _promoMinPurchaseEth;
-    } 
-
     function setRewardPercentages(uint256 bigPromoPercent, uint256 quickPromoPercent) onlyAdministrator public {
         _bigPromoPercent = bigPromoPercent;
         _quickPromoPercent = quickPromoPercent;
     }
     
     function transferQuickBonus(address userAddress) onlyControllerContract public {
-        Etherama(msg.sender).acceptQuickPromoBonusTransfer.value(getCurrentQuickPromoBonus())(userAddress);
+        Etherama(msg.sender).acceptQuickPromoBonusTransfer.value(_currentQuickPromoBonus)(userAddress);
         _currentQuickPromoBonus = 0;
     }
     
     function transferBigBonus(address userAddress) onlyControllerContract public {
-        Etherama(msg.sender).acceptBigPromoBonusTransfer.value(getCurrentBigPromoBonus())(userAddress);
+        Etherama(msg.sender).acceptBigPromoBonusTransfer.value(_currentBigPromoBonus)(userAddress);
         _currentBigPromoBonus = 0;
     }
 
-    function getDevReward() public view returns(uint256) {
-        return _currentDevReward;
-    }
-
     function addDevReward() onlyControllerContract payable public {
-        _currentDevReward = SafeMath.add(_currentDevReward, msg.value);
+        _devReward = SafeMath.add(_devReward, msg.value);
     }    
     
     function withdrawDevReward() onlyAdministrator public {
-        msg.sender.transfer(_currentDevReward);
+        uint256 reward = _devReward;
+        _devReward = 0;
 
-        _currentDevReward = 0;
+        msg.sender.transfer(reward);
     }
     
 }
 
-// Data contract for Etherama contract controller. Data contract cannot be changed so no data can be lost. On the other hand Etherama controller can be replaced if some error is found.
 contract EtheramaData {
 
-    address private _tokenContractAddress;
+    address public _tokenContractAddress;
     
     // token price in the begining
-    uint256 constant private TOKEN_PRICE_INITIAL = 0.001 ether;
+    uint256 constant public TOKEN_PRICE_INITIAL = 0.001 ether;
 
     // percent of a transaction commission which is taken for Token Owner. 
-    uint256 private _tokenOwnerRewardPercent = 30 ether;
+    uint256 public _tokenOwnerRewardPercent = 30 ether;
 
     // percent of a transaction commission which is taken for share reward. Each token holder receives a small reward from each buy or sell transaction proportionally his holding. 
-    uint256 private _shareRewardPercent = 25 ether;
+    uint256 public _shareRewardPercent = 25 ether;
 
     // percent of a transaction commission which is taken for a feraral link owner. If there is no any referal then this part of commission goes to share reward.
-    uint256 private _refBonusPercent = 20 ether;
+    uint256 public _refBonusPercent = 20 ether;
 
-    // a percent of the token price which adds/subs each _priceSpeedInterval tokens
-    uint64 private _priceSpeedPercent = 5;
-    // Token price speed interval. For instance, if _priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
-    uint64 private _priceSpeedInterval = 10000;
+    // a percent of the token price which adds/subs each _priceSpeedInterval
+    uint64 public _priceSpeedPercent = 5;
+    uint64 public _priceSpeedInterval = 10000;
 
     
     mapping(address => uint256) private _userTokenBalances;
@@ -269,33 +227,30 @@ contract EtheramaData {
     uint256 private  _administratorCount;
 
 
-    // percent of fee which is supposed to distribute.
-    uint256 private _totalIncomeFeePercent = 100 ether;
-
-    // minimum token amount which is required to get a referal link.
-    uint256 private _minRefTokenAmount = 1 ether;
-    uint64 private _initTime;
-    uint64 private _expirationTime;
-    uint256 private _bonusPerShare;
-    uint256 private _tokenOwnerReward;
+    uint256 public _totalIncomeFeePercent = 100 ether;
+    uint256 public _minRefTokenAmount = 1 ether;
+    uint64 public _initTime;
+    uint64 public _expirationTime;
+    uint256 public _bonusPerShare;
+    uint256 public _tokenOwnerReward;
     
-    uint256 private _totalSupply;
-    int128 private _realTokenPrice;
+    uint256 public _totalSupply;
+    int128 public _realTokenPrice;
 
-    address private _controllerAddress = address(0x0);
+    address public _controllerAddress = address(0x0);
 
-    EtheramaCore private _core;
+    EtheramaCore public _core;
 
-    uint256 private _buyCount;
-    uint256 private _sellCount;
-    uint256 private _totalVolumeEth;
-    uint256 private _totalVolumeToken;
+    uint256 public _buyCount;
+    uint256 public _sellCount;
+    uint256 public _totalVolumeEth;
+    uint256 public _totalVolumeToken;
 
-    uint256 private _initBlockNum;
+    uint256 public _initBlockNum;
     
-    bool private _hasMaxPurchaseLimit = true;
+    bool public _hasMaxPurchaseLimit = true;
     
-    IStdToken _token;
+    IStdToken public _token;
 
     //only main contract
     modifier onlyController() {
@@ -326,16 +281,9 @@ contract EtheramaData {
         _priceSpeedInterval = uint64(priceSpeedInterval);
     }
     
-    function getCore() public view returns(EtheramaCore) {
-        return _core;
-    }
     
     function getCoreAddress()  public view returns(address) {
         return address(_core);
-    }
-    
-    function getToken() public view returns(IStdToken) {
-        return _token;
     }
     
     function getMaxGasPrice() public view returns(uint256) {
@@ -347,15 +295,7 @@ contract EtheramaData {
         _controllerAddress = newAddress;
     }
 
-    function getControllerAddress() public view returns(address) {
-        return _controllerAddress;
-    }
-        
-    function getTokenInitialPrice() public pure returns(uint256) {
-        return TOKEN_PRICE_INITIAL;
-    }
 
-    // set reward persentages of buy/sell fee. Token owner cannot take more than 40%.
     function setRewardPercentages(uint256 tokenOwnerRewardPercent, uint256 shareRewardPercent, uint256 refBonusPercent) onlyController public {
         require(tokenOwnerRewardPercent <= 40 ether);
         require(shareRewardPercent <= 100 ether);
@@ -367,52 +307,44 @@ contract EtheramaData {
         _shareRewardPercent = shareRewardPercent;
         _refBonusPercent = refBonusPercent;
     }
+    
+    function getUserTokenBalance(address userAddress) public view returns(uint256) {
+        return _userTokenBalances[userAddress];
+    }
+    
+    function getUserRefBalance(address userAddress) public view returns(uint256) {
+        return _refBalances[userAddress];
+    }
+    
+    function getUserRewardPayouts(address userAddress) public view returns(uint256) {
+        return _rewardPayouts[userAddress];
+    }
 
-    function getTokenOwnerRewardPercent() public view returns(uint256) {
-        return _tokenOwnerRewardPercent;
-    }
-    
-    function getShareRewardPercent() public view returns(uint256) {
-        return _shareRewardPercent;
-    }
-    
-    function getRefBonusPercent() public view returns(uint256) {
-        return _refBonusPercent;
-    }
-    
+
     function getDevRewardPercent() public view returns(uint256) {
-        return _core.getDevRewardPercent();
+        return _core._devRewardPercent();
     }
     
     function getBigPromoPercent() public view returns(uint256) {
-        return _core.getBigPromoPercent();
+        return _core._bigPromoPercent();
     }
     
     function getQuickPromoPercent() public view returns(uint256) {
-        return _core.getQuickPromoPercent();
+        return _core._quickPromoPercent();
     }
     
     function getBigPromoInterval() public view returns(uint256) {
-        return _core.getBigPromoInterval();
+        return _core._bigPromoBlockInterval();
     }
     
     function getQuickPromoInterval() public view returns(uint256) {
-        return _core.getQuickPromoInterval();
+        return _core._quickPromoBlockInterval();
     }
     
     function getPromoMinPurchaseEth() public view returns(uint256) {
-        return _core.getPromoMinPurchaseEth();
+        return _core._promoMinPurchaseEth();
     }
 
-    function getPriceSpeedPercent() public view returns(uint64) {
-        return _priceSpeedPercent;
-    }
-    
-    function getPriceSpeedInterval() public view returns(uint64) {
-        return _priceSpeedInterval;
-    }
-
-    
     function addAdministator(address addr) onlyController public {
         _administrators[addr] = true;
         _administratorCount = SafeMath.add(_administratorCount, 1);
@@ -437,10 +369,6 @@ contract EtheramaData {
         _totalIncomeFeePercent = val;
     }
     
-    function getTotalIncomeFeePercent() public view returns(uint256) {
-        return _totalIncomeFeePercent;
-    }
-
     
     function addUserTokenBalance(address addr, uint256 val) onlyController public {
         _userTokenBalances[addr] = SafeMath.add(_userTokenBalances[addr], val);
@@ -449,11 +377,6 @@ contract EtheramaData {
     function subUserTokenBalance(address addr, uint256 val) onlyController public {
         _userTokenBalances[addr] = SafeMath.sub(_userTokenBalances[addr], val);
     }
-    
-    function getUserTokenBalance(address addr) public view returns (uint256) {
-        return _userTokenBalances[addr];
-    }
-    
 
     function resetUserRefBalance(address addr) onlyController public {
         _refBalances[addr] = 0;
@@ -462,11 +385,6 @@ contract EtheramaData {
     function addUserRefBalance(address addr, uint256 val) onlyController public {
         _refBalances[addr] = SafeMath.add(_refBalances[addr], val);
     }
-    
-    function getUserRefBalance(address addr) public view returns (uint256) {
-        return _refBalances[addr];
-    }    
-    
 
     function setUserRewardPayouts(address addr, uint256 val) onlyController public {
         _rewardPayouts[addr] = val;
@@ -475,10 +393,6 @@ contract EtheramaData {
     function addUserRewardPayouts(address addr, uint256 val) onlyController public {
         _rewardPayouts[addr] = SafeMath.add(_rewardPayouts[addr], val);
     }    
-    
-    function getUserRewardPayouts(address addr) public view returns (uint256) {
-        return _rewardPayouts[addr];
-    }
     
 
     function resetUserPromoBonus(address addr) onlyController public {
@@ -511,15 +425,6 @@ contract EtheramaData {
         _minRefTokenAmount = val;
     }
     
-    function getMinRefTokenAmount() public view returns (uint256) {
-        return _minRefTokenAmount;
-    }    
-
-    
-    function getExpirationTime() public view returns (uint256) {
-        return _expirationTime;
-    } 
-
     
     function getCommonInitBlockNum() public view returns (uint256) {
         return _core.getInitBlockNum();
@@ -528,10 +433,6 @@ contract EtheramaData {
     function addBonusPerShare(uint256 val) onlyController public {
         _bonusPerShare = SafeMath.add(_bonusPerShare, val);
     }    
-    
-    function getBonusPerShare() public view returns (uint256) {
-        return _bonusPerShare;
-    }
 
     function resetTokenOwnerReward() onlyController public {
         _tokenOwnerReward = 0;
@@ -541,39 +442,27 @@ contract EtheramaData {
         _tokenOwnerReward = SafeMath.add(_tokenOwnerReward, val);
     }
     
-    function getTokenOwnerReward() public view returns (uint256) {
-        return _tokenOwnerReward;
-    }
-    
     function getCurrentBigPromoBonus() public view returns (uint256) {
-        return _core.getCurrentBigPromoBonus();
+        return _core._currentBigPromoBonus();
     }        
     
 
     function getCurrentQuickPromoBonus() public view returns (uint256) {
-        return _core.getCurrentQuickPromoBonus();
+        return _core._currentQuickPromoBonus();
     }    
 
-    
     function getTotalCollectedPromoBonus() public view returns (uint256) {
-        return _core.getTotalCollectedPromoBonus();
+        return _core._totalCollectedPromoBonus();
     }    
 
     function setTotalSupply(uint256 val) onlyController public {
         _totalSupply = val;
     }
     
-    function getTotalSupply() public view returns (uint256) {
-        return _totalSupply;
-    }
-
     function setRealTokenPrice(int128 val) onlyController public {
         _realTokenPrice = val;
     }    
     
-    function getRealTokenPrice() public view returns (int128) {
-        return _realTokenPrice;
-    }
 
     function trackBuy(uint256 volEth, uint256 volToken) onlyController public {
         _buyCount = SafeMath.add(_buyCount, 1);
@@ -590,25 +479,6 @@ contract EtheramaData {
         _totalVolumeToken = SafeMath.add(_totalVolumeToken, volToken);
     }
 
-    function getBuyCount() public view returns(uint256) {
-        return _buyCount;
-    }
-
-    function getSellCount() public view returns(uint256) {
-        return _sellCount;
-    }   
-    
-    function getTotalVolumeEth() public view returns(uint256) {
-        return _totalVolumeEth;
-    }   
-    
-    function getTotalVolumeToken() public view returns(uint256) {
-        return _totalVolumeToken;
-    } 
-    
-    function getHasMaxPurchaseLimit() public view returns(bool) {
-        return _hasMaxPurchaseLimit;
-    }
     
     function setHasMaxPurchaseLimit(bool val) onlyController public {
         _hasMaxPurchaseLimit = val;
@@ -658,25 +528,23 @@ contract Etherama {
     }
 
     // administrators can:
-    // -> change minimal amout of tokens to get a ref link.
-    // administrators CANNOT:
+    // -> change the name of the contract
+    // -> change the PoS difficulty (How many tokens it costs to hold a masternode, in case it gets crazy high later)
+    // they CANNOT:
     // -> take funds
     // -> disable withdrawals
     // -> kill the contract
     // -> change the price of tokens
-    // -> suspend the contract
     modifier onlyAdministrator() {
         require(isCurrentUserAdministrator());
         _;
     }
 
-    // only active state of the contract. Administator can activate it, but canncon deactive untill lock-up period is expired.
     modifier onlyActive() {
         require(isActive);
         _;
     }
     
-    // maximum gas price for buy/sell transactions to avoid "front runner" vulnerability.
     modifier validGasPrice() {
         require(tx.gasprice <= _data.getMaxGasPrice());
         _;
@@ -687,25 +555,18 @@ contract Etherama {
         _;
     }
 
-
-    // tokenContractAddress - tranding token address
-    // dataContractAddress - data contract address where all the data is collected and separated from the controller
-    // coreAddress - Etherama core contract addres
-    // expirationInDays - lock-up period in days. Until this period is expeired nobody can close the contract or withdraw users' funds
-    // priceSpeedPercent - a percent of the token price which adds/subs each _priceSpeedInterval tokens
-    // priceSpeedInterval - Token price speed interval. For instance, if priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
     constructor(address tokenContractAddress, address dataContractAddress, address coreAddress, 
         uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedInterval) public {
         _data = dataContractAddress != address(0x0) ? EtheramaData(dataContractAddress) : new EtheramaData(coreAddress);
         
         if (dataContractAddress == address(0x0)) {
-            _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.getTokenInitialPrice()), priceSpeedPercent, priceSpeedInterval);
+            _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.TOKEN_PRICE_INITIAL()), priceSpeedPercent, priceSpeedInterval);
             _data.addAdministator(msg.sender);
             _creator = msg.sender;
         }
         
-        _token = _data.getToken();
-        _core = _data.getCore();
+        _token = _data._token();
+        _core = _data._core();
     }
 
     function addAdministator(address addr) onlyAdministrator public {
@@ -716,12 +577,10 @@ contract Etherama {
         _data.removeAdministator(addr);
     }
 
-    // transfer ownership of the contract to token owner from contract creator.
     function transferOwnership(address addr) onlyAdministrator public {
         addAdministator(addr);
     }
 
-    // accept transfer ownership.
     function acceptOwnership() onlyAdministrator public {
         require(_creator != address(0x0));
 
@@ -730,12 +589,10 @@ contract Etherama {
         require(_data.getAdministratorCount() == 1);
     }
     
-    // if there is a maximim purchase limit then a user can buy only amount of tokens which he had before, not more.
     function setHasMaxPurchaseLimit(bool val) onlyAdministrator public {
         _data.setHasMaxPurchaseLimit(val);
     }
-    
-    // Activate the contract
+        
     function activate() onlyAdministrator public {
         require(!isActive);
         
@@ -746,9 +603,8 @@ contract Etherama {
         isMigrationToNewControllerInProgress = false;
     }
     
-    // Close the contract and withdraw all the funds. The contract cannot be closed before lock up period is expired.
     function finish() onlyAdministrator public {
-        require(uint64(now) >= _data.getExpirationTime());
+        require(uint64(now) >= _data._expirationTime());
         
         _token.transfer(msg.sender, getRemainingTokenAmount());   
         msg.sender.transfer(getTotalEthBalance());
@@ -800,7 +656,7 @@ contract Etherama {
     }
 
      //Withdraws all of the callers earnings.
-    function withdraw() onlyActive onlyRewardOwners public {
+    function withdraw() onlyRewardOwners public {
         uint256 reward = getRewardAndPrepareWithdraw();
         
         msg.sender.transfer(reward);
@@ -808,7 +664,6 @@ contract Etherama {
         emit onWithdraw(msg.sender, reward);
     }
 
-    // withdraw token owner's reward
     function withdrawTokenOwnerReward() onlyAdministrator public {
         uint256 reward = getTokenOwnerReward();
         
@@ -821,34 +676,30 @@ contract Etherama {
         emit onWithdrawTokenOwnerReward(msg.sender, reward);
     }
 
-    // prepare the contract for migration to another one in case of some errors or refining
     function prepareForMigration() onlyAdministrator public {
         require(!isMigrationToNewControllerInProgress);
         isMigrationToNewControllerInProgress = true;
     }
-    
-    // accept funds to a new controller
-    function transferFundsToNewController() payable public {
+
+    function migrateFunds() payable public {
         require(isMigrationToNewControllerInProgress);
     }
     
 
     //HELPERS
-    // max gas price for buy/sell transactions
+    
     function getMaxGasPrice() public view returns(uint256) {
         return _data.getMaxGasPrice();
     }
-
-    // time when lock-up period is expired
+    
     function getExpirationTime() public view returns (uint256) {
-        return _data.getExpirationTime();
+        return _data._expirationTime();
     }
-
-    // time till lock-up period is expired 
+            
     function getRemainingTimeTillExpiration() public view returns (uint256) {
-        if (_data.getExpirationTime() <= uint64(now)) return 0;
+        if (_data._expirationTime() <= uint64(now)) return 0;
         
-        return _data.getExpirationTime() - uint64(now);
+        return _data._expirationTime() - uint64(now);
     }
 
     
@@ -856,12 +707,11 @@ contract Etherama {
         return _data.isAdministrator(msg.sender);
     }
 
-    // data contract address where all the data is holded
+    //data contract address where all the data is holded
     function getDataContractAddress() public view returns(address) {
         return address(_data);
     }
 
-    // get trading token address
     function getTokenAddress() public view returns(address) {
         return address(_token);
     }
@@ -880,33 +730,33 @@ contract Etherama {
         uint256 ethBalance = getTotalEthBalance();
 
         if (remainingTokenAmount > 0) _token.transfer(newControllerAddr, remainingTokenAmount); 
-        if (ethBalance > 0) newController.transferFundsToNewController.value(ethBalance)();
+        if (ethBalance > 0) newController.migrateFunds.value(ethBalance)();
         
         isActualContractVer = false;
     }
 
     function getBuyCount() public view returns(uint256) {
-        return _data.getBuyCount();
+        return _data._buyCount();
     }
 
     function getSellCount() public view returns(uint256) {
-        return _data.getSellCount();
+        return _data._sellCount();
     }
     
     function getTotalVolumeEth() public view returns(uint256) {
-        return _data.getTotalVolumeEth();
+        return _data._totalVolumeEth();
     }   
     
     function getTotalVolumeToken() public view returns(uint256) {
-        return _data.getTotalVolumeToken();
+        return _data._totalVolumeToken();
     } 
     
     function getBonusPerShare() public view returns (uint256) {
-        return SafeMath.div(SafeMath.mul(_data.getBonusPerShare(), 1 ether), _core.MAGNITUDE());
+        return SafeMath.div(SafeMath.mul(_data._bonusPerShare(), 1 ether), _core.MAGNITUDE());
     }    
 
     function getTokenInitialPrice() public view returns(uint256) {
-        return _data.getTokenInitialPrice();
+        return _data.TOKEN_PRICE_INITIAL();
     }
 
     function getDevRewardPercent() public view returns(uint256) {
@@ -914,15 +764,15 @@ contract Etherama {
     }
 
     function getTokenOwnerRewardPercent() public view returns(uint256) {
-        return _data.getTokenOwnerRewardPercent();
+        return _data._tokenOwnerRewardPercent();
     }
     
     function getShareRewardPercent() public view returns(uint256) {
-        return _data.getShareRewardPercent();
+        return _data._shareRewardPercent();
     }
     
     function getRefBonusPercent() public view returns(uint256) {
-        return _data.getRefBonusPercent();
+        return _data._refBonusPercent();
     }
     
     function getBigPromoPercent() public view returns(uint256) {
@@ -947,11 +797,11 @@ contract Etherama {
 
 
     function getPriceSpeedPercent() public view returns(uint64) {
-        return _data.getPriceSpeedPercent();
+        return _data._priceSpeedPercent();
     }
 
     function getPriceSpeedTokenBlock() public view returns(uint64) {
-        return _data.getPriceSpeedInterval();
+        return _data._priceSpeedInterval();
     }
 
     function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
@@ -963,7 +813,7 @@ contract Etherama {
     }
 
     function getMinRefTokenAmount() public view returns (uint256) {
-        return _data.getMinRefTokenAmount();
+        return _data._minRefTokenAmount();
     }    
 
     function getTotalCollectedPromoBonus() public view returns (uint256) {
@@ -979,7 +829,7 @@ contract Etherama {
     }    
 
     function getCurrentTokenPrice() public view returns(uint256) {
-        return convertRealTo256(_data.getRealTokenPrice());
+        return convertRealTo256(_data._realTokenPrice());
     }
 
     function getTotalEthBalance() public view returns(uint256) {
@@ -987,7 +837,7 @@ contract Etherama {
     }
     
     function getTotalTokenSupply() public view returns(uint256) {
-        return _data.getTotalSupply();
+        return _data._totalSupply();
     }
 
     function getRemainingTokenAmount() public view returns(uint256) {
@@ -1011,7 +861,7 @@ contract Etherama {
     }    
 
     function isRefAvailable(address refAddress) public view returns(bool) {
-        return getUserLocalTokenBalance(refAddress) >= _data.getMinRefTokenAmount();
+        return getUserLocalTokenBalance(refAddress) >= _data._minRefTokenAmount();
     }
 
     function isCurrentUserRefAvailable() public view returns(bool) {
@@ -1046,7 +896,7 @@ contract Etherama {
     }
 
     function getUserReward(address userAddress, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
-        uint256 reward = _data.getBonusPerShare() * getActualUserTokenBalance(userAddress);
+        uint256 reward = _data._bonusPerShare() * getActualUserTokenBalance(userAddress);
         reward = ((reward < _data.getUserRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, _data.getUserRewardPayouts(userAddress))) / _core.MAGNITUDE();
         
         if (incRefBonus) reward = SafeMath.add(reward, _data.getUserRefBalance(userAddress));
@@ -1074,7 +924,7 @@ contract Etherama {
     }
 
     function calcReward(uint256 tokenAmount) public view returns(uint256) {
-        return (uint256) ((int256)(_data.getBonusPerShare() * tokenAmount)) / _core.MAGNITUDE();
+        return (uint256) ((int256)(_data._bonusPerShare() * tokenAmount)) / _core.MAGNITUDE();
     }  
 
     function estimateBuyOrder(uint256 amount, bool fromEth) public view returns(uint256, uint256, uint256) {
@@ -1121,7 +971,7 @@ contract Etherama {
     }
 
     function getTokenOwnerReward() public view returns(uint256) {
-        return _data.getTokenOwnerReward();
+        return _data._tokenOwnerReward();
     }
 
     function getCurrentUserTotalPromoBonus() public view returns(uint256) {
@@ -1171,7 +1021,7 @@ contract Etherama {
         (tokenAmount, totalFeeEth, tokenPrice) = estimateBuyOrder(ethAmount, true);
         require(tokenAmount >= minReturn);
 
-        if (_data.getHasMaxPurchaseLimit()) {
+        if (_data._hasMaxPurchaseLimit()) {
             //user has to have at least equal amount of tokens which he's willing to buy 
             require(getCurrentUserMaxPurchase() >= tokenAmount);
         }
@@ -1185,7 +1035,7 @@ contract Etherama {
         addUserTokens(msg.sender, tokenAmount);
 
         // the user is not going to receive any reward for the current purchase
-        _data.addUserRewardPayouts(msg.sender, _data.getBonusPerShare() * tokenAmount);
+        _data.addUserRewardPayouts(msg.sender, _data._bonusPerShare() * tokenAmount);
 
         checkAndSendPromoBonus(ethAmount);
         
@@ -1199,7 +1049,7 @@ contract Etherama {
     }
 
     function setTotalSupply() internal {
-        require(_data.getTotalSupply() == 0);
+        require(_data._totalSupply() == 0);
 
         uint256 tokenAmount = _token.balanceOf(address(this));
 
@@ -1301,7 +1151,7 @@ contract Etherama {
 
     function ethToTokens(uint256 ethAmount, bool isBuy) internal view returns(uint256) {
         int128 realEthAmount = convert256ToReal(ethAmount);
-        int128 t0 = RealMath.div(realEthAmount, _data.getRealTokenPrice());
+        int128 t0 = RealMath.div(realEthAmount, _data._realTokenPrice());
         int128 s = getRealPriceSpeed();
 
         int128 tn =  RealMath.div(t0, RealMath.toReal(100));
@@ -1329,7 +1179,7 @@ contract Etherama {
         int128 s = getRealPriceSpeed();
         int128 expArg = RealMath.mul(RealMath.mul(realTokenAmount, s), RealMath.toReal(isBuy ? int64(1) : int64(-1)));
         
-        int128 realEthAmountFor1Token = RealMath.mul(_data.getRealTokenPrice(), RealMath.exp(expArg));
+        int128 realEthAmountFor1Token = RealMath.mul(_data._realTokenPrice(), RealMath.exp(expArg));
         int128 realEthAmount = RealMath.mul(realTokenAmount, realEthAmountFor1Token);
 
         return convertRealTo256(realEthAmount);
@@ -1339,7 +1189,7 @@ contract Etherama {
         int128 realTokenAmount = convert256ToReal(tokenAmount);
         int128 factor = RealMath.toReal(isBuy ? int64(1) : int64(-1));
         int128 rateAfterDeal = calc1RealTokenRateFromRealTokens(RealMath.mul(realTokenAmount, factor));
-        int128 delta = RealMath.div(rateAfterDeal - _data.getRealTokenPrice(), RealMath.toReal(2));
+        int128 delta = RealMath.div(rateAfterDeal - _data._realTokenPrice(), RealMath.toReal(2));
         int128 fee = RealMath.mul(realTokenAmount, delta);
         
         return convertRealTo256(RealMath.mul(fee, factor));
@@ -1350,24 +1200,24 @@ contract Etherama {
     function calc1RealTokenRateFromRealTokens(int128 realTokenAmount) internal view returns(int128) {
         int128 expArg = RealMath.mul(realTokenAmount, getRealPriceSpeed());
 
-        return RealMath.mul(_data.getRealTokenPrice(), RealMath.exp(expArg));
+        return RealMath.mul(_data._realTokenPrice(), RealMath.exp(expArg));
     }
     
     function getRealPriceSpeed() internal view returns(int128) {
-        return RealMath.div(RealMath.fraction(int64(_data.getPriceSpeedPercent()), 100), RealMath.toReal(int64(_data.getPriceSpeedInterval())));
+        return RealMath.div(RealMath.fraction(int64(_data._priceSpeedPercent()), 100), RealMath.toReal(int64(_data._priceSpeedInterval())));
     }
 
 
     function calcTotalShareRewardFee(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data.getShareRewardPercent());
+        return calcPercent(totalFee, _data._shareRewardPercent());
     }
     
     function calcRefBonus(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data.getRefBonusPercent());
+        return calcPercent(totalFee, _data._refBonusPercent());
     }
     
     function calcTokenOwnerReward(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data.getTokenOwnerRewardPercent());
+        return calcPercent(totalFee, _data._tokenOwnerRewardPercent());
     }
 
     function calcDevReward(uint256 totalFee) internal view returns(uint256) {

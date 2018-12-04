@@ -227,7 +227,7 @@ describe('ETHERARAMA', function() {
         assert.equal(bigPromoInterval, 7);
         assert.equal(quickPromoInterval, 5);
 
-        promoMinPurchaseEth = await coreContract.getPromoMinPurchaseEth();
+        promoMinPurchaseEth = await coreContract._promoMinPurchaseEth();
         minRefTokenAmount = await mraContract.getMinRefTokenAmount();
 
         await mraContract.activate({ from: creator });
@@ -956,7 +956,7 @@ describe('ETHERARAMA', function() {
 
     it('should withdraw dev reward', async() => {
 
-        var devReward1 = await coreContract.getDevReward();
+        var devReward1 = await coreContract._devReward();
         //console.log("devReward1: " + devReward1.toString(10));
         assert(devReward1 > 0);
 
@@ -965,7 +965,7 @@ describe('ETHERARAMA', function() {
 
         await coreContract.withdrawDevReward({ from: creator });
 
-        var devReward2 = await coreContract.getDevReward();
+        var devReward2 = await coreContract._devReward();
         assert.equal(devReward2.toString(10), "0");
 
         var devEthBalance2 = web3.eth.getBalance(creator);
