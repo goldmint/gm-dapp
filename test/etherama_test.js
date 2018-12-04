@@ -1230,9 +1230,8 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
         assert(oldContractEthBalance > 0);
         assert(buyer1TokenBalance1 > 0);
 
-        await mraContract.setMigrationStatus(true, { from: creator, gas: 300000 });
+        await mraContract.prepareForMigration({ from: creator, gas: 300000 });
         await mraContractOld.setNewControllerContractAddress(mraContractAddress, { from: creator, gas: 300000 });
-        await mraContract.setMigrationStatus(false, { from: creator, gas: 300000 });
 
         await coreContract.addControllerContract(mraContractAddress, { from: creator });
         await coreContract.removeControllerContract(mraContractAddressOld, { from: creator });
@@ -1252,7 +1251,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
 
         assert.equal(newContractEthBalance.toString(10), oldContractEthBalance.toString(10));
     });
-return;
+
     it('old controller should not receive ethers anymore', function(done) {
 
         var ethAmount = 2 * ether;

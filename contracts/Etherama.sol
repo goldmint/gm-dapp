@@ -8,8 +8,10 @@ contract IStdToken {
 
 contract EtheramaCommon {
     
+    //main adrministrators of the Etherama network
     mapping(address => bool) private _administrators;
 
+    //main managers of the Etherama network
     mapping(address => bool) private _managers;
 
     
@@ -52,6 +54,8 @@ contract EtheramaGasPriceLimit is EtheramaCommon {
     
     event onSetMaxGasPrice(uint256 val);    
     
+    //max gas price modifier for buy/sell transactions in order to avoid a "front runner" vulnerability.
+    //It is applied to all network contracts
     modifier validGasPrice(uint256 val) {
         require(val > 0);
         _;
@@ -65,6 +69,7 @@ contract EtheramaGasPriceLimit is EtheramaCommon {
         return MAX_GAS_PRICE;
     }
     
+    //only main administators or managers can set max gas price
     function setMaxGasPrice(uint256 val) public validGasPrice(val) onlyAdministratorOrManager {
         MAX_GAS_PRICE = val;
         
@@ -72,22 +77,33 @@ contract EtheramaGasPriceLimit is EtheramaCommon {
     }
 }
 
+// Core contract for Etherama network
 contract EtheramaCore is EtheramaGasPriceLimit {
     
     uint256 constant public MAGNITUDE = 2**64;
 
+    // Max and min amount of tokens which can be bought or sold. There are such limits because of math precision
     uint256 constant public MIN_TOKEN_DEAL_VAL = 0.1 ether;
     uint256 constant public MAX_TOKEN_DEAL_VAL = 1000000 ether;
 
+    // same same for ETH
     uint256 constant public MIN_ETH_DEAL_VAL = 0.001 ether;
     uint256 constant public MAX_ETH_DEAL_VAL = 200000 ether;
     
+    // percent of a transaction commission which is taken for Big Promo bonus
     uint256 private _bigPromoPercent = 5 ether;
+
+    // percent of a transaction commission which is taken for Quick Promo bonus
     uint256 private _quickPromoPercent = 5 ether;
+
+    // percent of a transaction commission which is taken for Etherama DEV team
     uint256 private _devRewardPercent = 15 ether;
     
 
+    // interval of blocks for Big Promo bonus. It means that a user which buy a bunch of tokens for X ETH in that particular block will receive a special bonus 
     uint128 private _bigPromoBlockInterval = 9999;
+
+    // same same for Quick Promo
     uint128 private _quickPromoBlockInterval = 100;
 
     uint256 private _currentBigPromoBonus;
@@ -220,18 +236,27 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     
 }
 
+// Data contract for Etherama contract controller. Data contract cannot be changed so no data can be lost. On the other hand Etherama controller can be replaced if some error is found.
 contract EtheramaData {
 
     address private _tokenContractAddress;
     
+    // token price in the begining
     uint256 constant private TOKEN_PRICE_INITIAL = 0.001 ether;
 
+    // percent of a transaction commission which is taken for Token Owner. 
     uint256 private _tokenOwnerRewardPercent = 30 ether;
+
+    // percent of a transaction commission which is taken for share reward. Each token holder receives a small reward from each buy or sell transaction proportionally his holding. 
     uint256 private _shareRewardPercent = 25 ether;
+
+    // percent of a transaction commission which is taken for a feraral link owner. If there is no any referal then this part of commission goes to share reward.
     uint256 private _refBonusPercent = 20 ether;
 
+    // a percent of the token price which adds/subs each _priceSpeedInterval tokens
     uint64 private _priceSpeedPercent = 5;
-    uint64 private _priceSpeedBlocks = 10000;
+    // Token price speed interval. For instance, if _priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
+    uint64 private _priceSpeedInterval = 10000;
 
     
     mapping(address => uint256) private _userTokenBalances;
@@ -244,7 +269,10 @@ contract EtheramaData {
     uint256 private  _administratorCount;
 
 
+    // percent of fee which is supposed to distribute.
     uint256 private _totalIncomeFeePercent = 100 ether;
+
+    // minimum token amount which is required to get a referal link.
     uint256 private _minRefTokenAmount = 1 ether;
     uint64 private _initTime;
     uint64 private _expirationTime;
@@ -283,11 +311,11 @@ contract EtheramaData {
         _initBlockNum = block.number;
     }
     
-    function init(address tokenContractAddress, uint64 expPeriodDays, int128 initRealTokenPrice, uint64 priceSpeedPercent, uint64 priceSpeedBlocks) onlyController public {
+    function init(address tokenContractAddress, uint64 expPeriodDays, int128 initRealTokenPrice, uint64 priceSpeedPercent, uint64 priceSpeedInterval) onlyController public {
         require(tokenContractAddress != address(0x0));
         require(expPeriodDays > 0);
         require(priceSpeedPercent > 0);
-        require(priceSpeedBlocks > 0);
+        require(priceSpeedInterval > 0);
 
         _token = IStdToken(tokenContractAddress);
         _initTime = uint64(now);
@@ -295,7 +323,7 @@ contract EtheramaData {
         _realTokenPrice = initRealTokenPrice;
         
         _priceSpeedPercent = uint64(priceSpeedPercent);
-        _priceSpeedBlocks = uint64(priceSpeedBlocks);
+        _priceSpeedInterval = uint64(priceSpeedInterval);
     }
     
     function getCore() public view returns(EtheramaCore) {
@@ -327,6 +355,7 @@ contract EtheramaData {
         return TOKEN_PRICE_INITIAL;
     }
 
+    // set reward persentages of buy/sell fee. Token owner cannot take more than 40%.
     function setRewardPercentages(uint256 tokenOwnerRewardPercent, uint256 shareRewardPercent, uint256 refBonusPercent) onlyController public {
         require(tokenOwnerRewardPercent <= 40 ether);
         require(shareRewardPercent <= 100 ether);
@@ -379,8 +408,8 @@ contract EtheramaData {
         return _priceSpeedPercent;
     }
     
-    function getPriceSpeedBlocks() public view returns(uint64) {
-        return _priceSpeedBlocks;
+    function getPriceSpeedInterval() public view returns(uint64) {
+        return _priceSpeedInterval;
     }
 
     
@@ -629,23 +658,25 @@ contract Etherama {
     }
 
     // administrators can:
-    // -> change the name of the contract
-    // -> change the PoS difficulty (How many tokens it costs to hold a masternode, in case it gets crazy high later)
-    // they CANNOT:
+    // -> change minimal amout of tokens to get a ref link.
+    // administrators CANNOT:
     // -> take funds
     // -> disable withdrawals
     // -> kill the contract
     // -> change the price of tokens
+    // -> suspend the contract
     modifier onlyAdministrator() {
         require(isCurrentUserAdministrator());
         _;
     }
 
+    // only active state of the contract. Administator can activate it, but canncon deactive untill lock-up period is expired.
     modifier onlyActive() {
         require(isActive);
         _;
     }
     
+    // maximum gas price for buy/sell transactions to avoid "front runner" vulnerability.
     modifier validGasPrice() {
         require(tx.gasprice <= _data.getMaxGasPrice());
         _;
@@ -656,12 +687,19 @@ contract Etherama {
         _;
     }
 
+
+    // tokenContractAddress - tranding token address
+    // dataContractAddress - data contract address where all the data is collected and separated from the controller
+    // coreAddress - Etherama core contract addres
+    // expirationInDays - lock-up period in days. Until this period is expeired nobody can close the contract or withdraw users' funds
+    // priceSpeedPercent - a percent of the token price which adds/subs each _priceSpeedInterval tokens
+    // priceSpeedInterval - Token price speed interval. For instance, if priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
     constructor(address tokenContractAddress, address dataContractAddress, address coreAddress, 
-        uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedBlocks) public {
+        uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedInterval) public {
         _data = dataContractAddress != address(0x0) ? EtheramaData(dataContractAddress) : new EtheramaData(coreAddress);
         
         if (dataContractAddress == address(0x0)) {
-            _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.getTokenInitialPrice()), priceSpeedPercent, priceSpeedBlocks);
+            _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.getTokenInitialPrice()), priceSpeedPercent, priceSpeedInterval);
             _data.addAdministator(msg.sender);
             _creator = msg.sender;
         }
@@ -678,10 +716,12 @@ contract Etherama {
         _data.removeAdministator(addr);
     }
 
+    // transfer ownership of the contract to token owner from contract creator.
     function transferOwnership(address addr) onlyAdministrator public {
         addAdministator(addr);
     }
 
+    // accept transfer ownership.
     function acceptOwnership() onlyAdministrator public {
         require(_creator != address(0x0));
 
@@ -690,10 +730,12 @@ contract Etherama {
         require(_data.getAdministratorCount() == 1);
     }
     
+    // if there is a maximim purchase limit then a user can buy only amount of tokens which he had before, not more.
     function setHasMaxPurchaseLimit(bool val) onlyAdministrator public {
         _data.setHasMaxPurchaseLimit(val);
     }
-        
+    
+    // Activate the contract
     function activate() onlyAdministrator public {
         require(!isActive);
         
@@ -704,6 +746,7 @@ contract Etherama {
         isMigrationToNewControllerInProgress = false;
     }
     
+    // Close the contract and withdraw all the funds. The contract cannot be closed before lock up period is expired.
     function finish() onlyAdministrator public {
         require(uint64(now) >= _data.getExpirationTime());
         
@@ -757,7 +800,7 @@ contract Etherama {
     }
 
      //Withdraws all of the callers earnings.
-    function withdraw() onlyRewardOwners public {
+    function withdraw() onlyActive onlyRewardOwners public {
         uint256 reward = getRewardAndPrepareWithdraw();
         
         msg.sender.transfer(reward);
@@ -765,6 +808,7 @@ contract Etherama {
         emit onWithdraw(msg.sender, reward);
     }
 
+    // withdraw token owner's reward
     function withdrawTokenOwnerReward() onlyAdministrator public {
         uint256 reward = getTokenOwnerReward();
         
@@ -777,26 +821,30 @@ contract Etherama {
         emit onWithdrawTokenOwnerReward(msg.sender, reward);
     }
 
-    function setMigrationStatus(bool val) onlyAdministrator public {
-        require(isMigrationToNewControllerInProgress != val);
-        isMigrationToNewControllerInProgress = val;
+    // prepare the contract for migration to another one in case of some errors or refining
+    function prepareForMigration() onlyAdministrator public {
+        require(!isMigrationToNewControllerInProgress);
+        isMigrationToNewControllerInProgress = true;
     }
-
-    function activateNewController() payable public {
+    
+    // accept funds to a new controller
+    function transferFundsToNewController() payable public {
         require(isMigrationToNewControllerInProgress);
     }
     
 
     //HELPERS
-    
+    // max gas price for buy/sell transactions
     function getMaxGasPrice() public view returns(uint256) {
         return _data.getMaxGasPrice();
     }
-    
+
+    // time when lock-up period is expired
     function getExpirationTime() public view returns (uint256) {
         return _data.getExpirationTime();
     }
-            
+
+    // time till lock-up period is expired 
     function getRemainingTimeTillExpiration() public view returns (uint256) {
         if (_data.getExpirationTime() <= uint64(now)) return 0;
         
@@ -808,11 +856,12 @@ contract Etherama {
         return _data.isAdministrator(msg.sender);
     }
 
-    //data contract address where all the data is holded
+    // data contract address where all the data is holded
     function getDataContractAddress() public view returns(address) {
         return address(_data);
     }
 
+    // get trading token address
     function getTokenAddress() public view returns(address) {
         return address(_token);
     }
@@ -831,7 +880,7 @@ contract Etherama {
         uint256 ethBalance = getTotalEthBalance();
 
         if (remainingTokenAmount > 0) _token.transfer(newControllerAddr, remainingTokenAmount); 
-        if (ethBalance > 0) newController.activateNewController.value(ethBalance)();
+        if (ethBalance > 0) newController.transferFundsToNewController.value(ethBalance)();
         
         isActualContractVer = false;
     }
@@ -902,7 +951,7 @@ contract Etherama {
     }
 
     function getPriceSpeedTokenBlock() public view returns(uint64) {
-        return _data.getPriceSpeedBlocks();
+        return _data.getPriceSpeedInterval();
     }
 
     function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
@@ -1305,7 +1354,7 @@ contract Etherama {
     }
     
     function getRealPriceSpeed() internal view returns(int128) {
-        return RealMath.div(RealMath.fraction(int64(_data.getPriceSpeedPercent()), 100), RealMath.toReal(int64(_data.getPriceSpeedBlocks())));
+        return RealMath.div(RealMath.fraction(int64(_data.getPriceSpeedPercent()), 100), RealMath.toReal(int64(_data.getPriceSpeedInterval())));
     }
 
 
