@@ -131,11 +131,11 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return _initBlockNum;
     }
     
-    function addControllerContract(address addr) onlyAdministrator public {
+    function addControllerContract(address addr) onlyAdministratorOrManager public {
         _controllerContracts[addr] = true;
     }
 
-    function removeControllerContract(address addr) onlyAdministrator public {
+    function removeControllerContract(address addr) onlyAdministratorOrManager public {
         _controllerContracts[addr] = false;
     }
     
@@ -252,7 +252,7 @@ contract EtheramaData {
 
     uint256 public _initBlockNum;
     
-    bool public _hasMaxPurchaseLimit = true;
+    bool public _hasMaxPurchaseLimit = false;
     
     IStdToken public _token;
 
@@ -265,16 +265,18 @@ contract EtheramaData {
     constructor(address coreAddress) public {
         require(coreAddress != address(0x0));
 
-        _controllerAddress = msg.sender;
         _core = EtheramaCore(coreAddress);
         _initBlockNum = block.number;
     }
     
-    function init(address tokenContractAddress, uint64 expPeriodDays, int128 initRealTokenPrice, uint64 priceSpeedPercent, uint64 priceSpeedInterval) onlyController public {
+    function init(address tokenContractAddress, uint64 expPeriodDays, int128 initRealTokenPrice, uint64 priceSpeedPercent, uint64 priceSpeedInterval) public {
+        require(_controllerAddress == address(0x0));
         require(tokenContractAddress != address(0x0));
         require(expPeriodDays > 0);
         require(priceSpeedPercent > 0);
         require(priceSpeedInterval > 0);
+
+        _controllerAddress = msg.sender;
 
         _token = IStdToken(tokenContractAddress);
         _initTime = uint64(now);
@@ -285,6 +287,9 @@ contract EtheramaData {
         _priceSpeedInterval = uint64(priceSpeedInterval);
     }
     
+    function isInited()  public view returns(bool) {
+        return (_controllerAddress != address(0x0));
+    }
     
     function getCoreAddress()  public view returns(address) {
         return address(_core);
@@ -569,15 +574,16 @@ contract Etherama {
 
     // tokenContractAddress - tranding token address
     // dataContractAddress - data contract address where all the data is collected and separated from the controller
-    // coreAddress - Etherama core contract addres
     // expirationInDays - lock-up period in days. Until this period is expeired nobody can close the contract or withdraw users' funds
     // priceSpeedPercent - a percent of the token price which adds/subs each _priceSpeedInterval tokens
     // priceSpeedInterval - Token price speed interval. For instance, if priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
-    constructor(address tokenContractAddress, address dataContractAddress, address coreAddress, 
+    constructor(address tokenContractAddress, address dataContractAddress,
         uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedInterval) public {
-        _data = dataContractAddress != address(0x0) ? EtheramaData(dataContractAddress) : new EtheramaData(coreAddress);
         
-        if (dataContractAddress == address(0x0)) {
+        require(dataContractAddress != address(0x0));
+        _data = EtheramaData(dataContractAddress);
+        
+        if (!_data.isInited()) {
             _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.TOKEN_PRICE_INITIAL()), priceSpeedPercent, priceSpeedInterval);
             _data.addAdministator(msg.sender);
             _creator = msg.sender;
@@ -586,6 +592,8 @@ contract Etherama {
         _token = _data._token();
         _core = _data._core();
     }
+
+
 
     function addAdministator(address addr) onlyAdministrator public {
         _data.addAdministator(addr);
@@ -626,7 +634,7 @@ contract Etherama {
     }
 
     // Close the contract and withdraw all the funds. The contract cannot be closed before lock up period is expired.
-    function finish() onlyAdministrator public {
+    function finish() onlyActive onlyAdministrator public {
         require(uint64(now) >= _data._expirationTime());
         
         _token.transfer(msg.sender, getRemainingTokenAmount());   

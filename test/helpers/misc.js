@@ -771,7 +771,7 @@ function deployEtheramaDataContract(data,cb){
                          dataContractAddress = result.contractAddress;
                          dataContract = web3.eth.contract(abi).at(dataContractAddress);
 
-                         console.log('Goldmint Etherama Data Contract address: ');
+                         console.log('Etherama Data Contract address: ');
                          console.log(dataContractAddress);
 
                          if(!alreadyCalled){
@@ -810,7 +810,6 @@ function deployEtheramaContract(data,cb){
           tempContract.new(
                mntContractAddress,
                dataContractAddress,
-               coreContractAddress,
                1,5,10000,
                {
                     from: creator, 
@@ -836,7 +835,7 @@ function deployEtheramaContract(data,cb){
                          mraContractAddress = result.contractAddress;
                          mraContract = web3.eth.contract(abi).at(mraContractAddress);
 
-                         console.log('Goldmint Etherama Contract address: ');
+                         console.log('Etherama Contract address: ');
                          console.log(mraContractAddress);
 
                          if(!alreadyCalled){

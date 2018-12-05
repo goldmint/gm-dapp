@@ -32,6 +32,8 @@ var mraContractAddressOld;
 var mraContractOld;
 
 var dataContractAddress = 0x0;
+var dataContract;
+
 
 var ether = 1000000000000000000;
 var initTotalTokenSupply = 0;
@@ -47,6 +49,8 @@ var promoMinPurchaseEth = 0;
 var blockNum = 0;
 var minRefTokenAmount = 0;
 var initTokenAmount = 0;
+
+var hasMaxPurchaseLimit = false;
 
 function addAccount(pk, name) {
     accounts.push({pubKey: pk, name: name, initTokenBalance: new BigNumber(0)})
@@ -145,7 +149,7 @@ describe('ETHERARAMA MAIN', function() {
 
 
 
-    it('should deploy token contract', function(done) {
+    it('should deploy contracts', function(done) {
           var data = {};
 
           deployMntContract(data,function(err) {
@@ -154,14 +158,14 @@ describe('ETHERARAMA MAIN', function() {
                deployEtheramaCore(data, function(err) {
                     assert.equal(err,null);
 
-                    //deployEtheramaDataContract(data,function(err) {
-                    //    assert.equal(err,null);
+                    deployEtheramaDataContract(data,function(err) {
+                        assert.equal(err,null);
 
                         deployEtheramaContract(data,function(err) {
                             assert.equal(err,null);
                             done();
                         });
-                    //});
+                    });
                });
                
 
@@ -180,7 +184,13 @@ describe('ETHERARAMA MAIN', function() {
 
         assert.equal(mraContractTokenAmount, mntContract.balanceOf(mraContractAddress));
 
-        var buyerTokenAmount = 30000*ether;
+        hasMaxPurchaseLimit = await dataContract._hasMaxPurchaseLimit();
+
+        var buyerTokenAmount = 0;
+
+        if (!hasMaxPurchaseLimit) return;
+
+        buyerTokenAmount = 30000*ether;
 
         initTokenAmount = new BigNumber(buyerTokenAmount);
 
@@ -346,7 +356,7 @@ describe('ETHERARAMA MAIN', function() {
             var estimateTokenAmount = est[0]; 
             var totalPurchaseFee = est[1];
 
-            var maxPurchaseTokenAmountAfterDeal = initTokenAmount.sub(mraContractUserBalance1).sub(estimateTokenAmount);
+            var maxPurchaseTokenAmountAfterDeal = hasMaxPurchaseLimit ? initTokenAmount.sub(mraContractUserBalance1).sub(estimateTokenAmount) : -1;
 
 
             updateTokenBalance(estimateTokenAmount);
@@ -391,9 +401,10 @@ describe('ETHERARAMA MAIN', function() {
             var totalTokenSold2 = await mraContract.getTotalTokenSold({ from:creator });
             assert(totalTokenSold2.toString(10), estimateTokenAmount.toString(10));
             
-            var maxPurchaseTokenAmount = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
-            assert.equal(maxPurchaseTokenAmount.toString(10), maxPurchaseTokenAmountAfterDeal.toString(10));
-
+            if (hasMaxPurchaseLimit) {
+                var maxPurchaseTokenAmount = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
+                assert.equal(maxPurchaseTokenAmount.toString(10), maxPurchaseTokenAmountAfterDeal.toString(10));
+            }
             initTotalTokenSupply = await mraContract.getTotalTokenSupply(); 
             
         }
@@ -415,7 +426,8 @@ describe('ETHERARAMA MAIN', function() {
             var estimateTokenAmount = est[0]; 
             var totalPurchaseFee = est[1];
 
-            var maxPurchaseTokenAmountAfterDeal = initTokenAmount.sub(mraContractUserBalance1).sub(estimateTokenAmount);
+
+            var maxPurchaseTokenAmountAfterDeal = hasMaxPurchaseLimit ? initTokenAmount.sub(mraContractUserBalance1).sub(estimateTokenAmount) : -1;
 
 
             updateTokenBalance(estimateTokenAmount);
@@ -463,9 +475,10 @@ describe('ETHERARAMA MAIN', function() {
             var totalTokenSold2 = await mraContract.getTotalTokenSold({ from:creator });
             assert(totalTokenSold2.toString(10), estimateTokenAmount.toString(10));
             
-            var maxPurchaseTokenAmount = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
-            assert.equal(maxPurchaseTokenAmount.toString(10), maxPurchaseTokenAmountAfterDeal.toString(10));
-
+            if (hasMaxPurchaseLimit) {
+                var maxPurchaseTokenAmount = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
+                assert.equal(maxPurchaseTokenAmount.toString(10), maxPurchaseTokenAmountAfterDeal.toString(10));
+            }
         }
     });
 
@@ -583,6 +596,11 @@ describe('ETHERARAMA MAIN', function() {
     });
 
     it('should not make a purchase behalf buyer3',  function(done) {
+
+        if (!hasMaxPurchaseLimit) {
+            done();
+            return;
+        }
 
         var ethAmount = 2.5 * ether;
         mraContract.estimateBuyOrder(ethAmount, true, function(err, est) {
@@ -792,11 +810,13 @@ describe('ETHERARAMA MAIN', function() {
                 var est = await mraContract.estimateBuyOrder(ethAmount, true);
                 var estimateTokenAmount = est[0]; 
                 //console.log("buy est: " + est);
-    
-                var curMaxPurchase = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
-                //console.log("curMaxPurchase: " + curMaxPurchase + "; estimateTokenAmount: " + estimateTokenAmount);
-                assert(curMaxPurchase.sub(estimateTokenAmount) > 0);
-    
+                
+                if (hasMaxPurchaseLimit) {
+                    var curMaxPurchase = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
+                    //console.log("curMaxPurchase: " + curMaxPurchase + "; estimateTokenAmount: " + estimateTokenAmount);
+                    assert(curMaxPurchase.sub(estimateTokenAmount) > 0);
+                }
+
                 await mraContract.buy(0x0, estimateTokenAmount, { from: buyer1, gas: 2900000, value: ethAmount });
     
     
@@ -829,7 +849,6 @@ describe('ETHERARAMA MAIN', function() {
     
                 assert(promoBonus.sub(promoBonus1) == 0);
                 var mraContractUserBalance2 = mraContract.getCurrentUserLocalTokenBalance({ from: buyer1 });
-                var maxPurchaseTokenAmount = await mraContract.getCurrentUserMaxPurchase({ from: buyer1 });
                 //console.log("mraContractUserBalance2: " + mraContractUserBalance2.toString(10) + "; maxPurchaseTokenAmount: " + maxPurchaseTokenAmount.toString(10) + "; tokenAmount: " + estimateTokenAmount.toString(10));
     
                 await mraContract.buy(0x0, 1, { from: buyer1, gas: 600000, value: ethAmount });
@@ -1128,7 +1147,7 @@ describe('ETHERARAMA MAIN', function() {
 
         var buyer5TokenBalance = await mraContract.getCurrentUserLocalTokenBalance({ from: buyer5 });
         console.log("sell remainings: " + buyer5TokenBalance.div(ether) + " tokens; totalTokenBalance: " + totalTokenBalance);
-        assert(Math.abs(totalTokenBalance - bignumToFloat(buyer5TokenBalance)) < 1E-12);    
+        assert(Math.abs(totalTokenBalance - bignumToFloat(buyer5TokenBalance)) < 1E-6);    
 
         updateTokenBalance(buyer5TokenBalance.mul(-1));
         var expectedTokenPrice = getExpectedTokenPrice();
