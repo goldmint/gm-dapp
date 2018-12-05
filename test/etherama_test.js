@@ -328,7 +328,6 @@ describe('ETHERARAMA MAIN', function() {
     });  
 */
 
-
     it('should make a purchase behalf buyer1 1', async() => {
         {
             var ethAmount = 2 * ether;
@@ -1230,8 +1229,11 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
         assert(oldContractEthBalance > 0);
         assert(buyer1TokenBalance1 > 0);
 
-        await mraContract.prepareForMigration({ from: creator, gas: 300000 });
-        await mraContractOld.setNewControllerContractAddress(mraContractAddress, { from: creator, gas: 300000 });
+        var isAdmin = await mraContract.isCurrentUserAdministrator({ from: newAdmin });
+        assert(isAdmin);
+
+        await mraContract.prepareForMigration({ from: newAdmin, gas: 300000 });
+        await mraContractOld.setNewControllerContractAddress(mraContractAddress, { from: newAdmin, gas: 300000 });
 
         await coreContract.addControllerContract(mraContractAddress, { from: creator });
         await coreContract.removeControllerContract(mraContractAddressOld, { from: creator });
@@ -1272,7 +1274,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
 
     it('should activate new controller', async() => {
 
-        await mraContract.activate({ from: creator });
+        await mraContract.activate({ from: newAdmin });
 
         await web3.eth.sendTransaction({ from: buyer1, to: mraContractAddress, value: 0.1 * ether, gas: 2900000 });
 

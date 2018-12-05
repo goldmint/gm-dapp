@@ -556,6 +556,12 @@ contract Etherama {
         _;
     }
     
+    // eth value must be greater than 0 for purchase transactions
+    modifier validPayableValue() {
+        require(msg.value > 0);
+        _;
+    }
+    
     modifier onlyCoreContract() {
         require(msg.sender == _data.getCoreAddress());
         _;
@@ -630,7 +636,7 @@ contract Etherama {
     }
     
     //Converts incoming eth to tokens
-    function buy(address refAddress, uint256 minReturn) onlyActive validGasPrice public payable returns(uint256) {
+    function buy(address refAddress, uint256 minReturn) onlyActive validGasPrice validPayableValue public payable returns(uint256) {
         return purchaseTokens(msg.value, refAddress, minReturn);
     }
 
@@ -659,7 +665,7 @@ contract Etherama {
 
 
     //Fallback function to handle eth that was sent straight to the contract
-    function() onlyActive validGasPrice payable external {
+    function() onlyActive validGasPrice validPayableValue payable external {
         purchaseTokens(msg.value, address(0x0), 1);
     }
 
@@ -1267,7 +1273,7 @@ contract Etherama {
         return SafeMath.mul(uint256(roundedVal), uint256(1e6));
     }
 
-    //Converts uint256 to real num.
+    //Converts uint256 to real num. Possible a little loose of precision
     function convert256ToReal(uint256 val) internal pure returns(int128) {
         return RealMath.fraction(int64(SafeMath.div(val, 1e6)), 1e12);
     }
