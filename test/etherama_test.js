@@ -113,7 +113,7 @@ function getContractBalanceEth() {
 
 eval(fs.readFileSync('./test/helpers/misc.js')+'');
 
-describe('ETHERARAMA', function() {
+describe('ETHERARAMA MAIN', function() {
 
     before("Initialize everything", function(done) {
           web3.eth.getAccounts(function(err, as) {
@@ -1167,7 +1167,7 @@ describe('ETHERARAMA', function() {
 
 
 });
-return;
+
 describe('ETHERARAMA NEW CONTROLLER', function(){
 
     before("Initialize everything", function(done) {

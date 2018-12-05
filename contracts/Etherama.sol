@@ -196,6 +196,7 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     
 }
 
+// Data contract for Etherama contract controller. Data contract cannot be changed so no data can be lost. On the other hand Etherama controller can be replaced if some error is found.
 contract EtheramaData {
 
     address public _tokenContractAddress;
@@ -212,8 +213,9 @@ contract EtheramaData {
     // percent of a transaction commission which is taken for a feraral link owner. If there is no any referal then this part of commission goes to share reward.
     uint256 public _refBonusPercent = 20 ether;
 
-    // a percent of the token price which adds/subs each _priceSpeedInterval
+    // a percent of the token price which adds/subs each _priceSpeedInterval tokens
     uint64 public _priceSpeedPercent = 5;
+    // Token price speed interval. For instance, if _priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
     uint64 public _priceSpeedInterval = 10000;
 
     
@@ -226,8 +228,10 @@ contract EtheramaData {
     mapping(address => bool) private _administrators;
     uint256 private  _administratorCount;
 
-
+    // percent of fee which is supposed to distribute.
     uint256 public _totalIncomeFeePercent = 100 ether;
+
+    // minimum token amount which is required to get a referal link.
     uint256 public _minRefTokenAmount = 1 ether;
     uint64 public _initTime;
     uint64 public _expirationTime;
@@ -295,7 +299,7 @@ contract EtheramaData {
         _controllerAddress = newAddress;
     }
 
-
+    // set reward persentages of buy/sell fee. Token owner cannot take more than 40%.
     function setRewardPercentages(uint256 tokenOwnerRewardPercent, uint256 shareRewardPercent, uint256 refBonusPercent) onlyController public {
         require(tokenOwnerRewardPercent <= 40 ether);
         require(shareRewardPercent <= 100 ether);
@@ -528,23 +532,25 @@ contract Etherama {
     }
 
     // administrators can:
-    // -> change the name of the contract
-    // -> change the PoS difficulty (How many tokens it costs to hold a masternode, in case it gets crazy high later)
-    // they CANNOT:
+    // -> change minimal amout of tokens to get a ref link.
+    // administrators CANNOT:
     // -> take funds
     // -> disable withdrawals
     // -> kill the contract
     // -> change the price of tokens
+    // -> suspend the contract
     modifier onlyAdministrator() {
         require(isCurrentUserAdministrator());
         _;
     }
 
+    // only active state of the contract. Administator can activate it, but canncon deactive untill lock-up period is expired.
     modifier onlyActive() {
         require(isActive);
         _;
     }
-    
+
+    // maximum gas price for buy/sell transactions to avoid "front runner" vulnerability.   
     modifier validGasPrice() {
         require(tx.gasprice <= _data.getMaxGasPrice());
         _;
@@ -555,6 +561,12 @@ contract Etherama {
         _;
     }
 
+    // tokenContractAddress - tranding token address
+    // dataContractAddress - data contract address where all the data is collected and separated from the controller
+    // coreAddress - Etherama core contract addres
+    // expirationInDays - lock-up period in days. Until this period is expeired nobody can close the contract or withdraw users' funds
+    // priceSpeedPercent - a percent of the token price which adds/subs each _priceSpeedInterval tokens
+    // priceSpeedInterval - Token price speed interval. For instance, if priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
     constructor(address tokenContractAddress, address dataContractAddress, address coreAddress, 
         uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedInterval) public {
         _data = dataContractAddress != address(0x0) ? EtheramaData(dataContractAddress) : new EtheramaData(coreAddress);
@@ -577,10 +589,12 @@ contract Etherama {
         _data.removeAdministator(addr);
     }
 
+    // transfer ownership of the contract to token owner from contract creator.
     function transferOwnership(address addr) onlyAdministrator public {
         addAdministator(addr);
     }
 
+    // accept transfer ownership.
     function acceptOwnership() onlyAdministrator public {
         require(_creator != address(0x0));
 
@@ -589,10 +603,12 @@ contract Etherama {
         require(_data.getAdministratorCount() == 1);
     }
     
+    // if there is a maximim purchase limit then a user can buy only amount of tokens which he had before, not more.
     function setHasMaxPurchaseLimit(bool val) onlyAdministrator public {
         _data.setHasMaxPurchaseLimit(val);
     }
         
+    // activate the controller contract. After calling this function anybody can start trading the contrant's tokens
     function activate() onlyAdministrator public {
         require(!isActive);
         
@@ -602,7 +618,8 @@ contract Etherama {
         isActive = true;
         isMigrationToNewControllerInProgress = false;
     }
-    
+
+    // Close the contract and withdraw all the funds. The contract cannot be closed before lock up period is expired.
     function finish() onlyAdministrator public {
         require(uint64(now) >= _data._expirationTime());
         
@@ -641,7 +658,7 @@ contract Etherama {
     }   
 
 
-    //Fallback function to handle ethereum that was send straight to the contract
+    //Fallback function to handle eth that was sent straight to the contract
     function() onlyActive validGasPrice payable external {
         purchaseTokens(msg.value, address(0x0), 1);
     }
@@ -664,6 +681,7 @@ contract Etherama {
         emit onWithdraw(msg.sender, reward);
     }
 
+    // withdraw token owner's reward
     function withdrawTokenOwnerReward() onlyAdministrator public {
         uint256 reward = getTokenOwnerReward();
         
@@ -676,26 +694,31 @@ contract Etherama {
         emit onWithdrawTokenOwnerReward(msg.sender, reward);
     }
 
+    // prepare the contract for migration to another one in case of some errors or refining
     function prepareForMigration() onlyAdministrator public {
         require(!isMigrationToNewControllerInProgress);
         isMigrationToNewControllerInProgress = true;
     }
 
+    // accept funds transfer to a new controller during a migration.
     function migrateFunds() payable public {
         require(isMigrationToNewControllerInProgress);
     }
     
 
     //HELPERS
-    
+
+    // max gas price for buy/sell transactions  
     function getMaxGasPrice() public view returns(uint256) {
         return _data.getMaxGasPrice();
     }
-    
+
+    // max gas price for buy/sell transactions
     function getExpirationTime() public view returns (uint256) {
         return _data._expirationTime();
     }
             
+    // time till lock-up period is expired 
     function getRemainingTimeTillExpiration() public view returns (uint256) {
         if (_data._expirationTime() <= uint64(now)) return 0;
         
@@ -712,6 +735,7 @@ contract Etherama {
         return address(_data);
     }
 
+    // get trading token contract address
     function getTokenAddress() public view returns(address) {
         return address(_token);
     }
