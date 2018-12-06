@@ -131,12 +131,17 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return _initBlockNum;
     }
     
-    function addControllerContract(address addr) onlyAdministratorOrManager public {
+    function addControllerContract(address addr) onlyAdministrator public {
         _controllerContracts[addr] = true;
     }
 
-    function removeControllerContract(address addr) onlyAdministratorOrManager public {
+    function removeControllerContract(address addr) onlyAdministrator public {
         _controllerContracts[addr] = false;
+    }
+    
+    function changeControllerContract(address oldAddr, address newAddress) onlyAdministrator public {
+         _controllerContracts[oldAddr] = false;
+         _controllerContracts[newAddress] = true;
     }
     
 
@@ -193,6 +198,25 @@ contract EtheramaCore is EtheramaGasPriceLimit {
 
         msg.sender.transfer(reward);
     }
+    
+    function getBlockNumSinceInit() public view returns(uint256) {
+        return block.number - getInitBlockNum();
+    }
+
+    function getQuickPromoRemainingBlocks() public view returns(uint256) {
+        uint256 d = getBlockNumSinceInit() % _quickPromoBlockInterval;
+        d = d == 0 ? _quickPromoBlockInterval : d;
+
+        return _quickPromoBlockInterval - d;
+    }
+
+    function getBigPromoRemainingBlocks() public view returns(uint256) {
+        uint256 d = getBlockNumSinceInit() % _bigPromoBlockInterval;
+        d = d == 0 ? _bigPromoBlockInterval : d;
+
+        return _bigPromoBlockInterval - d;
+    } 
+    
     
 }
 
@@ -1025,21 +1049,15 @@ contract Etherama {
     }
    
     function getBlockNumSinceInit() public view returns(uint256) {
-        return block.number - _data.getCommonInitBlockNum();
+        return _core.getBlockNumSinceInit();
     }
 
     function getQuickPromoRemainingBlocks() public view returns(uint256) {
-        uint256 d = getBlockNumSinceInit() % _data.getQuickPromoInterval();
-        d = d == 0 ? _data.getQuickPromoInterval() : d;
-
-        return _data.getQuickPromoInterval() - d;
+        return _core.getQuickPromoRemainingBlocks();
     }
 
     function getBigPromoRemainingBlocks() public view returns(uint256) {
-        uint256 d = getBlockNumSinceInit() % _data.getBigPromoInterval();
-        d = d == 0 ? _data.getBigPromoInterval() : d;
-
-        return _data.getBigPromoInterval() - d;
+        return _core.getBigPromoRemainingBlocks();
     } 
     
     function acceptQuickPromoBonusTransfer(address userAddress) onlyCoreContract payable public {
