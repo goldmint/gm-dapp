@@ -297,9 +297,10 @@ contract EtheramaData {
         require(_controllerAddress == address(0x0));
         require(tokenContractAddress != address(0x0));
         require(expPeriodDays > 0);
-        require(priceSpeedPercent > 0);
-        require(priceSpeedInterval > 0);
-
+        require(RealMath.isUInt64ValidIn64(priceSpeedPercent));
+        require(RealMath.isUInt64ValidIn64(priceSpeedInterval));
+        
+        
         _controllerAddress = msg.sender;
 
         _token = IStdToken(tokenContractAddress);
@@ -1260,6 +1261,9 @@ contract Etherama {
     }
     
     function getRealPriceSpeed() internal view returns(int128) {
+        require(RealMath.isUInt64ValidIn64(_data._priceSpeedPercent()));
+        require(RealMath.isUInt64ValidIn64(_data._priceSpeedInterval()));
+        
         return RealMath.div(RealMath.fraction(int64(_data._priceSpeedPercent()), 100), RealMath.toReal(int64(_data._priceSpeedInterval())));
     }
 
@@ -1301,7 +1305,10 @@ contract Etherama {
 
     //Converts uint256 to real num. Possible a little loose of precision
     function convert256ToReal(uint256 val) internal pure returns(int128) {
-        return RealMath.fraction(int64(SafeMath.div(val, 1e6)), 1e12);
+        uint256 intVal = SafeMath.div(val, 1e6);
+        require(RealMath.isUInt256ValidIn64(intVal));
+        
+        return RealMath.fraction(int64(intVal), 1e12);
     }
 
 }
@@ -1360,6 +1367,9 @@ library SafeMath {
 //taken from https://github.com/NovakDistributed/macroverse/blob/master/contracts/RealMath.sol and a bit modified
 library RealMath {
     
+    int64 constant MIN_INT64 = int64((uint64(1) << 63));
+    int64 constant MAX_INT64 = int64(~((uint64(1) << 63)));
+    
     /**
      * How many total bits are there?
      */
@@ -1417,6 +1427,30 @@ library RealMath {
     int128 constant SIGN_MASK = int128(1) << 127;
     
 
+    function getMinInt64() internal pure returns (int64) {
+        return MIN_INT64;
+    }
+    
+    function getMaxInt64() internal pure returns (int64) {
+        return MAX_INT64;
+    }
+    
+    function isUInt256ValidIn64(uint256 val) internal pure returns (bool) {
+        return val >= 0 && val <= uint256(getMaxInt64());
+    }
+    
+    function isInt256ValidIn64(int256 val) internal pure returns (bool) {
+        return val >= int256(getMinInt64()) && val <= int256(getMaxInt64());
+    }
+    
+    function isUInt64ValidIn64(uint64 val) internal pure returns (bool) {
+        return val >= 0 && val <= uint64(getMaxInt64());
+    }
+    
+    function isInt128ValidIn64(int128 val) internal pure returns (bool) {
+        return val >= int128(getMinInt64()) && val <= int128(getMaxInt64());
+    }
+
     /**
      * Convert an integer to a real. Preserves sign.
      */
@@ -1428,7 +1462,10 @@ library RealMath {
      * Convert a real to an integer. Preserves sign.
      */
     function fromReal(int128 real_value) internal pure returns (int64) {
-        return int64(real_value / REAL_ONE);
+        int128 intVal = real_value / REAL_ONE;
+        require(isInt128ValidIn64(intVal));
+        
+        return int64(intVal);
     }
     
     
@@ -1597,6 +1634,8 @@ library RealMath {
             // Not in domain!
             revert();
         }
+        
+        require(isInt256ValidIn64(REAL_FBITS));
         
         // Find the high bit
         int64 high_bit = findbit(hibit(uint256(real_arg)));
