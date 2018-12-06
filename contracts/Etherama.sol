@@ -297,8 +297,8 @@ contract EtheramaData {
         require(_controllerAddress == address(0x0));
         require(tokenContractAddress != address(0x0));
         require(expPeriodDays > 0);
-        require(RealMath.isUInt64ValidIn64(priceSpeedPercent));
-        require(RealMath.isUInt64ValidIn64(priceSpeedInterval));
+        require(RealMath.isUInt64ValidIn64(priceSpeedPercent) && priceSpeedPercent > 0);
+        require(RealMath.isUInt64ValidIn64(priceSpeedInterval) && priceSpeedInterval > 0);
         
         
         _controllerAddress = msg.sender;
