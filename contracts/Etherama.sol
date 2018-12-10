@@ -96,12 +96,29 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     // percent of a transaction commission which is taken for Etherama DEV team
     uint256 public _devRewardPercent = 15 ether;
     
+    // percent of a transaction commission which is taken for Token Owner. 
+    uint256 public _tokenOwnerRewardPercent = 30 ether;
+
+    // percent of a transaction commission which is taken for share reward. Each token holder receives a small reward from each buy or sell transaction proportionally his holding. 
+    uint256 public _shareRewardPercent = 25 ether;
+
+    // percent of a transaction commission which is taken for a feraral link owner. If there is no any referal then this part of commission goes to share reward.
+    uint256 public _refBonusPercent = 20 ether;
 
     // interval of blocks for Big Promo bonus. It means that a user which buy a bunch of tokens for X ETH in that particular block will receive a special bonus 
     uint128 public _bigPromoBlockInterval = 9999;
 
     // same same for Quick Promo
     uint128 public _quickPromoBlockInterval = 100;
+    
+    // minimum eth amount of a purchase which is required to participate in promo.
+    uint256 public _promoMinPurchaseEth = 1 ether;
+    
+    // minimum eth purchase which is required to get a referal link.
+    uint256 public _minRefEthPurchase = 0.5 ether;
+
+    // percent of fee which is supposed to distribute.
+    uint256 public _totalIncomeFeePercent = 100 ether;
 
     uint256 public _currentBigPromoBonus;
     uint256 public _currentQuickPromoBonus;
@@ -109,11 +126,6 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     
     uint256 public _devReward;
 
-    // minimum eth amount of a purchase which is required to participate in promo.
-    uint256 public _promoMinPurchaseEth = 1 ether;
-    
-    // minimum eth amount of a amount which is required to get a referal link.
-    uint256 public _minRefEthAmount = 0.5 ether;
     
     uint256 public _initBlockNum;
 
@@ -121,14 +133,30 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     mapping(uint256 => address) private _controllerIndexer;
     uint256 private _controllerContractCount;
     
+    //user token balances per data contracts
     mapping(address => mapping(address => uint256)) private _userTokenLocalBalances;
+    //user reward payouts per data contracts
     mapping(address => mapping(address => uint256)) private _rewardPayouts;
+    //user ref rewards per data contracts
     mapping(address => mapping(address => uint256)) private _refBalances;
+    //user won quick promo bonuses per data contracts
     mapping(address => mapping(address => uint256)) private _promoQuickBonuses;
+    //user won big promo bonuses per data contracts
     mapping(address => mapping(address => uint256)) private _promoBigBonuses;  
-    
+    //user saldo between buys and sels in eth per data contracts
+    mapping(address => mapping(address => uint256)) private _userEthVolumeSaldos;  
+
+    //bonuses per share per data contracts
     mapping(address => uint256) private _bonusesPerShare;
-    
+    //buy counts per data contracts
+    mapping(address => uint256) private _buyCounts;
+    //sell counts per data contracts
+    mapping(address => uint256) private _sellCounts;
+    //total volume eth per data contracts
+    mapping(address => uint256) private _totalVolumeEth;
+    //total volume tokens per data contracts
+    mapping(address => uint256) private _totalVolumeToken;
+
     
     event onWithdrawUserBonus(address indexed userAddress, uint256 ethWithdrawn); 
 
@@ -192,14 +220,34 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         _promoMinPurchaseEth = val;
     }
     
-    function setMinRefEthAmount(uint256 val) onlyAdministrator public {
-        _minRefEthAmount = val;
+    function setMinRefEthPurchase(uint256 val) onlyAdministrator public {
+        _minRefEthPurchase = val;
     }
     
-    function setRewardPercentages(uint256 bigPromoPercent, uint256 quickPromoPercent) onlyAdministrator public {
+    function setTotalIncomeFeePercent(uint256 val) onlyController public {
+        require(val > 0 && val <= 100 ether);
+
+        _totalIncomeFeePercent = val;
+    }
+        
+    
+    // set reward persentages of buy/sell fee. Token owner cannot take more than 40%.
+    function setRewardPercentages(uint256 tokenOwnerRewardPercent, uint256 shareRewardPercent, uint256 refBonusPercent, uint256 bigPromoPercent, uint256 quickPromoPercent) onlyAdministrator public {
+        require(tokenOwnerRewardPercent <= 40 ether);
+        require(shareRewardPercent <= 100 ether);
+        require(refBonusPercent <= 100 ether);
+        require(bigPromoPercent <= 100 ether);
+        require(quickPromoPercent <= 100 ether);
+
+        require(tokenOwnerRewardPercent + shareRewardPercent + refBonusPercent + _devRewardPercent + _bigPromoPercent + _quickPromoPercent == 100 ether);
+
+        _tokenOwnerRewardPercent = tokenOwnerRewardPercent;
+        _shareRewardPercent = shareRewardPercent;
+        _refBonusPercent = refBonusPercent;
         _bigPromoPercent = bigPromoPercent;
         _quickPromoPercent = quickPromoPercent;
-    }
+    }    
+    
     
     function payoutQuickBonus(address userAddress) onlyController public {
         address dataContractAddress = Etherama(msg.sender).getDataContractAddress();
@@ -294,6 +342,49 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         _promoQuickBonuses[dataContractAddress][userAddress] = 0;
         _promoBigBonuses[dataContractAddress][userAddress] = 0;
     }
+    
+    
+    function trackBuy(address userAddress, uint256 volEth, uint256 volToken) onlyController public {
+        address dataContractAddress = Etherama(msg.sender).getDataContractAddress();
+        _buyCounts[dataContractAddress] = SafeMath.add(_buyCounts[dataContractAddress], 1);
+        _userEthVolumeSaldos[dataContractAddress][userAddress] = SafeMath.add(_userEthVolumeSaldos[dataContractAddress][userAddress], volEth);
+        
+        trackTotalVolume(dataContractAddress, volEth, volToken);
+    }
+
+    function trackSell(address userAddress, uint256 volEth, uint256 volToken) onlyController public {
+        address dataContractAddress = Etherama(msg.sender).getDataContractAddress();
+        _sellCounts[dataContractAddress] = SafeMath.add(_sellCounts[dataContractAddress], 1);
+        _userEthVolumeSaldos[dataContractAddress][userAddress] = SafeMath.sub(_userEthVolumeSaldos[dataContractAddress][userAddress], volEth);
+        
+        trackTotalVolume(dataContractAddress, volEth, volToken);
+    }
+    
+    function trackTotalVolume(address dataContractAddress, uint256 volEth, uint256 volToken) internal {
+        _totalVolumeEth[dataContractAddress] = SafeMath.add(_totalVolumeEth[dataContractAddress], volEth);
+        _totalVolumeToken[dataContractAddress] = SafeMath.add(_totalVolumeToken[dataContractAddress], volToken);
+    }
+    
+    function getBuyCount(address dataContractAddress) public view returns (uint256) {
+        return _buyCounts[dataContractAddress];
+    }
+    
+    function getSellCount(address dataContractAddress) public view returns (uint256) {
+        return _sellCounts[dataContractAddress];
+    }
+
+    function getTotalVolumeEth(address dataContractAddress) public view returns (uint256) {
+        return _totalVolumeEth[dataContractAddress];
+    }
+    
+    function getTotalVolumeToken(address dataContractAddress) public view returns (uint256) {
+        return _totalVolumeToken[dataContractAddress];
+    }
+
+    function getUserEthVolumeSaldo(address dataContractAddress, address userAddress) public view returns (uint256) {
+        return _userEthVolumeSaldos[dataContractAddress][userAddress];
+    }
+    
 
     function getUserTotalPromoBonus(address dataContractAddress, address userAddress) public view returns (uint256) {
         return SafeMath.add(_promoQuickBonuses[dataContractAddress][userAddress], _promoBigBonuses[dataContractAddress][userAddress]);
@@ -360,6 +451,7 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         emit onWithdrawUserBonus(msg.sender, reward);
     }
 
+    //gather all the user's reward and prepare it to withdaw
     function getRewardAndPrepareWithdraw() internal returns(uint256 reward) {
         
         for (uint256 i = 0; i < _controllerContractCount; i++) {
@@ -383,6 +475,14 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return reward;
     }
     
+    //withdaw all the remamining ETH if there is no one active contract. We don't want to leave them here forever
+    function withdrawRemainingEthAfterAll() onlyAdministrator public {
+        for (uint256 i = 0; i < _controllerContractCount; i++) {
+            if (Etherama(_controllerIndexer[i]).isActive()) revert();
+        }
+        
+        msg.sender.transfer(address(this).balance);
+    }
 }
 
 // Data contract for Etherama contract controller. Data contract cannot be changed so no data can be lost. On the other hand Etherama controller can be replaced if some error is found.
@@ -392,32 +492,16 @@ contract EtheramaData {
     
     // token price in the begining
     uint256 constant public TOKEN_PRICE_INITIAL = 0.001 ether;
-
-    // percent of a transaction commission which is taken for Token Owner. 
-    uint256 public _tokenOwnerRewardPercent = 30 ether;
-
-    // percent of a transaction commission which is taken for share reward. Each token holder receives a small reward from each buy or sell transaction proportionally his holding. 
-    uint256 public _shareRewardPercent = 25 ether;
-
-    // percent of a transaction commission which is taken for a feraral link owner. If there is no any referal then this part of commission goes to share reward.
-    uint256 public _refBonusPercent = 20 ether;
-
+    
     // a percent of the token price which adds/subs each _priceSpeedInterval tokens
     uint64 public _priceSpeedPercent = 5;
     // Token price speed interval. For instance, if _priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
     uint64 public _priceSpeedInterval = 10000;
 
     
-
-
     mapping(address => bool) private _administrators;
     uint256 private  _administratorCount;
 
-    // percent of fee which is supposed to distribute.
-    uint256 public _totalIncomeFeePercent = 100 ether;
-
-    // minimum token amount which is required to get a referal link.
-    uint256 public _minRefTokenAmount = 1 ether;
     uint64 public _initTime;
     uint64 public _expirationTime;
     uint256 public _tokenOwnerReward;
@@ -428,11 +512,6 @@ contract EtheramaData {
     address public _controllerAddress = address(0x0);
 
     EtheramaCore public _core;
-
-    uint256 public _buyCount;
-    uint256 public _sellCount;
-    uint256 public _totalVolumeEth;
-    uint256 public _totalVolumeToken;
 
     uint256 public _initBlockNum;
     
@@ -485,39 +564,7 @@ contract EtheramaData {
         _controllerAddress = newAddress;
     }
 
-    // set reward persentages of buy/sell fee. Token owner cannot take more than 40%.
-    function setRewardPercentages(uint256 tokenOwnerRewardPercent, uint256 shareRewardPercent, uint256 refBonusPercent) onlyController public {
-        require(tokenOwnerRewardPercent <= 40 ether);
-        require(shareRewardPercent <= 100 ether);
-        require(refBonusPercent <= 100 ether);
 
-        require(tokenOwnerRewardPercent + shareRewardPercent + refBonusPercent + getDevRewardPercent() + getBigPromoPercent() + getQuickPromoPercent() == 100 ether);
-
-        _tokenOwnerRewardPercent = tokenOwnerRewardPercent;
-        _shareRewardPercent = shareRewardPercent;
-        _refBonusPercent = refBonusPercent;
-    }
-
-
-    function getDevRewardPercent() public view returns(uint256) {
-        return _core._devRewardPercent();
-    }
-    
-    function getBigPromoPercent() public view returns(uint256) {
-        return _core._bigPromoPercent();
-    }
-    
-    function getQuickPromoPercent() public view returns(uint256) {
-        return _core._quickPromoPercent();
-    }
-    
-    function getBigPromoInterval() public view returns(uint256) {
-        return _core._bigPromoBlockInterval();
-    }
-    
-    function getQuickPromoInterval() public view returns(uint256) {
-        return _core._quickPromoBlockInterval();
-    }
     
     function getPromoMinPurchaseEth() public view returns(uint256) {
         return _core._promoMinPurchaseEth();
@@ -541,16 +588,6 @@ contract EtheramaData {
         return _administrators[addr];
     }
 
-    function setTotalIncomeFeePercent(uint256 val) onlyController public {
-        require(val > 0 && val <= 100 ether);
-
-        _totalIncomeFeePercent = val;
-    }
-    
-    function setMinRefTokenAmount(uint256 val) onlyController public {
-        _minRefTokenAmount = val;
-    }
-    
     
     function getCommonInitBlockNum() public view returns (uint256) {
         return _core.getInitBlockNum();
@@ -586,22 +623,6 @@ contract EtheramaData {
         _realTokenPrice = val;
     }    
     
-
-    function trackBuy(uint256 volEth, uint256 volToken) onlyController public {
-        _buyCount = SafeMath.add(_buyCount, 1);
-        trackVolume(volEth, volToken);
-    }
-
-    function trackSell(uint256 volEth, uint256 volToken) onlyController public {
-        _sellCount = SafeMath.add(_sellCount, 1);
-        trackVolume(volEth, volToken);
-    }
-    
-    function trackVolume(uint256 volEth, uint256 volToken) internal {
-        _totalVolumeEth = SafeMath.add(_totalVolumeEth, volEth);
-        _totalVolumeToken = SafeMath.add(_totalVolumeToken, volToken);
-    }
-
     
     function setHasMaxPurchaseLimit(bool val) onlyController public {
         _hasMaxPurchaseLimit = val;
@@ -650,6 +671,14 @@ contract EtheramaData {
     function getTotalTokenSold() public view returns(uint256) {
         return _totalSupply - getRemainingTokenAmount();
     }   
+    
+    function getUserEthVolumeSaldo(address userAddress) public view returns(uint256) {
+        return _core.getUserEthVolumeSaldo(address(this), userAddress);
+    }
+    
+    function isRefAvailable(address refAddress) public view returns(bool) {
+        return getUserEthVolumeSaldo(refAddress) >= _core._minRefEthPurchase();
+    }
 
 }
 
@@ -821,7 +850,7 @@ contract Etherama {
 
         distributeFee(totalFeeEth, address(0x0));
 
-        _data.trackSell(ethAmount, tokenAmount);
+        _core.trackSell(msg.sender, ethAmount, tokenAmount);
        
         emit onTokenSell(msg.sender, tokenAmount, ethAmount);
 
@@ -913,19 +942,19 @@ contract Etherama {
     }
 
     function getBuyCount() public view returns(uint256) {
-        return _data._buyCount();
+        return _core.getBuyCount(address(this));
     }
 
     function getSellCount() public view returns(uint256) {
-        return _data._sellCount();
+        return _core.getSellCount(address(this));
     }
     
     function getTotalVolumeEth() public view returns(uint256) {
-        return _data._totalVolumeEth();
+        return _core.getTotalVolumeEth(address(this));
     }   
     
     function getTotalVolumeToken() public view returns(uint256) {
-        return _data._totalVolumeToken();
+        return _core.getTotalVolumeToken(address(this));
     } 
     
     function getBonusPerShare() public view returns (uint256) {
@@ -937,39 +966,39 @@ contract Etherama {
     }
 
     function getDevRewardPercent() public view returns(uint256) {
-        return _data.getDevRewardPercent();
+        return _core._devRewardPercent();
     }
 
     function getTokenOwnerRewardPercent() public view returns(uint256) {
-        return _data._tokenOwnerRewardPercent();
+        return _core._tokenOwnerRewardPercent();
     }
     
     function getShareRewardPercent() public view returns(uint256) {
-        return _data._shareRewardPercent();
+        return _core._shareRewardPercent();
     }
     
     function getRefBonusPercent() public view returns(uint256) {
-        return _data._refBonusPercent();
+        return _core._refBonusPercent();
     }
     
     function getBigPromoPercent() public view returns(uint256) {
-        return _data.getBigPromoPercent();
+        return _core._bigPromoPercent();
     }
     
     function getQuickPromoPercent() public view returns(uint256) {
-        return _data.getQuickPromoPercent();
+        return _core._quickPromoPercent();
     }
 
-    function getBigPromoInterval() public view returns(uint256) {
-        return _data.getBigPromoInterval();
+    function getBigPromoBlockInterval() public view returns(uint256) {
+        return _core._bigPromoBlockInterval();
     }
 
-    function getQuickPromoInterval() public view returns(uint256) {
-        return _data.getQuickPromoInterval();
+    function getQuickPromoBlockInterval() public view returns(uint256) {
+        return _core._quickPromoBlockInterval();
     }
 
     function getPromoMinPurchaseEth() public view returns(uint256) {
-        return _data.getPromoMinPurchaseEth();
+        return _core._promoMinPurchaseEth();
     }
 
 
@@ -981,16 +1010,8 @@ contract Etherama {
         return _data._priceSpeedInterval();
     }
 
-    function setMinRefTokenAmount(uint256 val) onlyAdministrator public {
-        _data.setMinRefTokenAmount(val);
-    }
-
-    function setTotalIncomeFeePercent(uint256 val) onlyAdministrator public {
-        _data.setTotalIncomeFeePercent(val);
-    }
-
-    function getMinRefTokenAmount() public view returns (uint256) {
-        return _data._minRefTokenAmount();
+    function getMinRefEthPurchase() public view returns (uint256) {
+        return _core._minRefEthPurchase();
     }    
 
     function getTotalCollectedPromoBonus() public view returns (uint256) {
@@ -1034,7 +1055,7 @@ contract Etherama {
     }    
 
     function isRefAvailable(address refAddress) public view returns(bool) {
-        return getUserLocalTokenBalance(refAddress) >= _data._minRefTokenAmount();
+        return _data.isRefAvailable(refAddress);
     }
 
     function isCurrentUserRefAvailable() public view returns(bool) {
@@ -1193,7 +1214,7 @@ contract Etherama {
         
         updateTokenPrice(convert256ToReal(tokenAmount));
         
-        _data.trackBuy(ethAmount, tokenAmount);
+        _core.trackBuy(msg.sender, ethAmount, tokenAmount);
 
         emit onTokenPurchase(msg.sender, ethAmount, tokenAmount, refAddress);
         
@@ -1326,9 +1347,11 @@ contract Etherama {
         int128 rateAfterDeal = calc1RealTokenRateFromRealTokens(RealMath.mul(realTokenAmount, factor));
         int128 delta = RealMath.div(rateAfterDeal - _data._realTokenPrice(), RealMath.toReal(2));
         int128 fee = RealMath.mul(realTokenAmount, delta);
+        
+        //commission for sells is a bit lower due to rounding error
         if (!isBuy) fee = RealMath.mul(fee, RealMath.fraction(95, 100));
 
-        return convertRealTo256(RealMath.mul(fee, factor));
+        return calcPercent(convertRealTo256(RealMath.mul(fee, factor)), _core._totalIncomeFeePercent());
     }
 
 
@@ -1348,27 +1371,27 @@ contract Etherama {
 
 
     function calcTotalShareRewardFee(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data._shareRewardPercent());
+        return calcPercent(totalFee, _core._shareRewardPercent());
     }
     
     function calcRefBonus(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data._refBonusPercent());
+        return calcPercent(totalFee, _core._refBonusPercent());
     }
     
     function calcTokenOwnerReward(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data._tokenOwnerRewardPercent());
+        return calcPercent(totalFee, _core._tokenOwnerRewardPercent());
     }
 
     function calcDevReward(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data.getDevRewardPercent());
+        return calcPercent(totalFee, _core._devRewardPercent());
     }
 
     function calcQuickPromoBonus(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data.getQuickPromoPercent());
+        return calcPercent(totalFee, _core._quickPromoPercent());
     }    
 
     function calcBigPromoBonus(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _data.getBigPromoPercent());
+        return calcPercent(totalFee, _core._bigPromoPercent());
     }        
     
     function calcPercent(uint256 amount, uint256 percent) public pure returns(uint256) {

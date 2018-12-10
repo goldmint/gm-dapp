@@ -47,7 +47,7 @@ var bigPromoInterval = 0;
 var quickPromoInterval = 0;
 var promoMinPurchaseEth = 0;
 var blockNum = 0;
-var minRefTokenAmount = 0;
+var minRefEthPurchase = 0;
 var initTokenAmount = 0;
 
 var hasMaxPurchaseLimit = false;
@@ -229,14 +229,14 @@ describe('ETHERARAMA MAIN', function() {
         await coreContract.setBigPromoInterval(7, { from: creator });
         await coreContract.setQuickPromoInterval(5, { from: creator });
 
-        bigPromoInterval = await mraContract.getBigPromoInterval();
-        quickPromoInterval = await mraContract.getQuickPromoInterval();
+        bigPromoInterval = await mraContract.getBigPromoBlockInterval();
+        quickPromoInterval = await mraContract.getQuickPromoBlockInterval();
 
         assert.equal(bigPromoInterval, 7);
         assert.equal(quickPromoInterval, 5);
 
         promoMinPurchaseEth = await coreContract._promoMinPurchaseEth();
-        minRefTokenAmount = await mraContract.getMinRefTokenAmount();
+        minRefEthPurchase = await mraContract.getMinRefEthPurchase();
 
         await mraContract.activate({ from: creator });
 
@@ -1139,22 +1139,7 @@ return;
     });
 
     
-    it('should transfer ownership', function(done) {
-        mraContract.transferOwnership(newAdmin, { from: creator }, function(err) {
-            assert.equal(err, null);
 
-            mraContract.acceptOwnership({ from: newAdmin }, function(err) {
-                assert.equal(err, null);
-                
-                mraContract.addAdministator(buyer5, { from: creator }, function(err) {
-                    assert.notEqual(err, null);
-                    done();
-                });
-            })
-            
-        });
-
-    });
 
 
 });
@@ -1186,6 +1171,23 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
     after("Deinitialize everything", function(done) {
         done();
     });    
+
+    it('should transfer ownership', function(done) {
+        mraContract.transferOwnership(newAdmin, { from: creator }, function(err) {
+            assert.equal(err, null);
+
+            mraContract.acceptOwnership({ from: newAdmin }, function(err) {
+                assert.equal(err, null);
+                
+                mraContract.addAdministator(buyer5, { from: creator }, function(err) {
+                    assert.notEqual(err, null);
+                    done();
+                });
+            })
+            
+        });
+
+    });
 
     it('should deploy token contract', function(done) {
         var data = {};
