@@ -26,6 +26,7 @@ function deployMntContract(data,cb){
      var file = './contracts/ICO.sol';
      var contractName = ':MNTP';
 
+
      fs.readFile(file, function(err, result){
           assert.equal(err,null);
 
@@ -54,11 +55,13 @@ function deployMntContract(data,cb){
                     data: '0x' + bytecode
                }, 
                function(err, c){
+                    if (alreadyCalled) return cb(null);
+                    alreadyCalled = true;
+
                     assert.equal(err, null);
 
-                    console.log('TX HASH: ');
-                    console.log(c.transactionHash);
-
+                    //console.log('TX HASH: ');
+                    //console.log(c.transactionHash);
                     // TX can be processed in 1 minute or in 30 minutes...
                     // So we can not be sure on this -> result can be null.
                     web3.eth.getTransactionReceipt(c.transactionHash, function(err, result){
@@ -71,8 +74,7 @@ function deployMntContract(data,cb){
                          mntContractAddress = result.contractAddress;
                          mntContract = web3.eth.contract(abi).at(mntContractAddress);
 
-                         console.log('MNTP Contract address: ');
-                         console.log(mntContractAddress);
+                         console.log('MNTP Contract address: ' + mntContractAddress);
 
                          if(!alreadyCalled){
                               alreadyCalled = true;
@@ -692,10 +694,12 @@ function deployEtheramaCore(data, cb) {
                 data: '0x' + bytecode
             }, 
             function(err, c){
+               if (alreadyCalled) return cb(null);
+               alreadyCalled = true;
                 assert.equal(err, null);
 
-                console.log('TX HASH: ');
-                console.log(c.transactionHash);
+                //console.log('TX HASH: ');
+                //console.log(c.transactionHash);
 
                 // TX can be processed in 1 minute or in 30 minutes...
                 // So we can not be sure on this -> result can be null.
@@ -754,6 +758,8 @@ function deployEtheramaDataContract(data,cb){
                     data: '0x' + bytecode
                }, 
                function(err, c){
+                    if (alreadyCalled) return cb(null);
+                    alreadyCalled = true;
                     assert.equal(err, null);
 
                     console.log('TX HASH: ');
@@ -818,6 +824,8 @@ function deployEtheramaContract(data,cb){
                     data: '0x' + bytecode
                }, 
                function(err, c){
+                    if (alreadyCalled) return cb(null);
+                    alreadyCalled = true;
                     assert.equal(err, null);
 
                     console.log('TX HASH: ');
