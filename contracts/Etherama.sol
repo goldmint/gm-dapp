@@ -385,6 +385,12 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return _userEthVolumeSaldos[dataContractAddress][userAddress];
     }
     
+    function getUserTotalEthVolumeSaldo(address userAddress) public view returns (uint256 res) {
+        for (uint256 i = 0; i < _controllerContractCount; i++) {
+            res = SafeMath.add(res, _userEthVolumeSaldos[Etherama(_controllerIndexer[i]).getDataContractAddress()][userAddress]);
+        } 
+    }
+    
 
     function getUserTotalPromoBonus(address dataContractAddress, address userAddress) public view returns (uint256) {
         return SafeMath.add(_promoQuickBonuses[dataContractAddress][userAddress], _promoBigBonuses[dataContractAddress][userAddress]);
@@ -427,8 +433,8 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return reward;
     }
     
+    //user's total reward from all the tokens on the table. includes share reward + referal bonus + promo bonus
     function getUserTotalReward(address userAddress, bool incRefBonus, bool incPromoBonus) public view returns(uint256 res) {
-        
         for (uint256 i = 0; i < _controllerContractCount; i++) {
             address dataContractAddress = Etherama(_controllerIndexer[i]).getDataContractAddress();
             
@@ -436,8 +442,19 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         }
     }
  
+    //current user's reward
     function getCurrentUserReward(bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
         return getUserTotalReward(msg.sender, incRefBonus, incPromoBonus);
+    }
+    
+    //is ref link available for the user
+    function isRefAvailable(address refAddress) public view returns(bool) {
+        return getUserTotalEthVolumeSaldo(refAddress) >= _minRefEthPurchase;
+    }
+    
+    //is ref link available for the current user
+    function isRefAvailable() public view returns(bool) {
+        return isRefAvailable(msg.sender);
     }
     
      //Withdraws all of the user earnings.
@@ -674,10 +691,6 @@ contract EtheramaData {
     
     function getUserEthVolumeSaldo(address userAddress) public view returns(uint256) {
         return _core.getUserEthVolumeSaldo(address(this), userAddress);
-    }
-    
-    function isRefAvailable(address refAddress) public view returns(bool) {
-        return getUserEthVolumeSaldo(refAddress) >= _core._minRefEthPurchase();
     }
 
 }
@@ -941,26 +954,27 @@ contract Etherama {
         isActualContractVer = false;
     }
 
+    //total buy count
     function getBuyCount() public view returns(uint256) {
         return _core.getBuyCount(address(this));
     }
-
+    //total sell count
     function getSellCount() public view returns(uint256) {
         return _core.getSellCount(address(this));
     }
-    
+    //total eth volume
     function getTotalVolumeEth() public view returns(uint256) {
         return _core.getTotalVolumeEth(address(this));
     }   
-    
+    //total token volume
     function getTotalVolumeToken() public view returns(uint256) {
         return _core.getTotalVolumeToken(address(this));
     } 
-    
+    //current bonus per 1 token in ETH
     function getBonusPerShare() public view returns (uint256) {
         return SafeMath.div(SafeMath.mul(_data.getBonusPerShare(), 1 ether), _core.MAGNITUDE());
     }    
-
+    //token initial price in ETH
     function getTokenInitialPrice() public view returns(uint256) {
         return _data.TOKEN_PRICE_INITIAL();
     }
@@ -1026,38 +1040,46 @@ contract Etherama {
         return _data.getCurrentQuickPromoBonus();
     }    
 
+    //current token price
     function getCurrentTokenPrice() public view returns(uint256) {
         return convertRealTo256(_data._realTokenPrice());
     }
 
+    //contract's eth balance
     function getTotalEthBalance() public view returns(uint256) {
         return address(this).balance;
     }
     
+    //amount of tokens which were funded to the contract initially
     function getTotalTokenSupply() public view returns(uint256) {
         return _data._totalSupply();
     }
 
+    //amount of tokens which are still available for selling on the contract
     function getRemainingTokenAmount() public view returns(uint256) {
         return _token.balanceOf(address(this));
     }
-
+    
+    //amount of tokens which where sold by the contract
     function getTotalTokenSold() public view returns(uint256) {
         return getTotalTokenSupply() - getRemainingTokenAmount();
     }
-
+    
+    //user's token amount which were bought from the contract
     function getUserLocalTokenBalance(address userAddress) public view returns(uint256) {
         return _data.getUserTokenLocalBalance(userAddress);
     }
     
+    //current user's token amount which were bought from the contract
     function getCurrentUserLocalTokenBalance() public view returns(uint256) {
         return getUserLocalTokenBalance(msg.sender);
     }    
 
+    //is referal link available for the user
     function isRefAvailable(address refAddress) public view returns(bool) {
-        return _data.isRefAvailable(refAddress);
+        return _core.isRefAvailable(refAddress);
     }
-
+    //is referal link available for the current user
     function isCurrentUserRefAvailable() public view returns(bool) {
         return isRefAvailable(msg.sender);
     }
@@ -1078,21 +1100,25 @@ contract Etherama {
         return _data.getUserTotalPromoBonus(msg.sender);
     }
     
+    //max and min values of a deal in tokens
     function getTokenDealRange() public view returns(uint256, uint256) {
         return (_core.MIN_TOKEN_DEAL_VAL(), _core.MAX_TOKEN_DEAL_VAL());
     }
-
+    
+    //max and min values of a deal in ETH
     function getEthDealRange() public view returns(uint256, uint256) {
         uint256 minTokenVal; uint256 maxTokenVal;
         (minTokenVal, maxTokenVal) = getTokenDealRange();
         
         return ( SafeMath.max(_core.MIN_ETH_DEAL_VAL(), tokensToEth(minTokenVal, true)), SafeMath.min(_core.MAX_ETH_DEAL_VAL(), tokensToEth(maxTokenVal, true)) );
     }
-
+    
+    //user's total reward from all the tokens on the table. includes share reward + referal bonus + promo bonus
     function getUserReward(address userAddress, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
         return _data.getUserReward(userAddress, incRefBonus, incPromoBonus);
     }
-  
+    
+    //price for selling 1 token. mostly useful only for frontend
     function get1TokenSellPrice() public view returns(uint256) {
         uint256 tokenAmount = 1 ether;
 
@@ -1102,6 +1128,7 @@ contract Etherama {
         return ethAmount;
     }
     
+    //price for buying 1 token. mostly useful only for frontend
     function get1TokenBuyPrice() public view returns(uint256) {
         uint256 ethAmount = 1 ether;
 
@@ -1111,10 +1138,12 @@ contract Etherama {
         return SafeMath.div(ethAmount * 1 ether, tokenAmount);
     }
 
+    //calc current reward for holding @tokenAmount tokens
     function calcReward(uint256 tokenAmount) public view returns(uint256) {
         return (uint256) ((int256)(_data.getBonusPerShare() * tokenAmount)) / _core.MAGNITUDE();
     }  
 
+    //esimate buy order by amount of ETH/tokens. returns tokens/eth amount after the deal, total fee in ETH and average token price
     function estimateBuyOrder(uint256 amount, bool fromEth) public view returns(uint256, uint256, uint256) {
         uint256 minAmount; uint256 maxAmount;
         (minAmount, maxAmount) = fromEth ? getEthDealRange() : getTokenDealRange();
@@ -1132,6 +1161,7 @@ contract Etherama {
         return (fromEth ? tokenAmount : SafeMath.add(ethAmount, totalFeeEth), totalFeeEth, tokenPrice);
     }
     
+    //esimate sell order by amount of tokens/ETH. returns eth/tokens amount after the deal, total fee in ETH and average token price
     function estimateSellOrder(uint256 amount, bool fromToken) public view returns(uint256, uint256, uint256) {
         uint256 minAmount; uint256 maxAmount;
         (minAmount, maxAmount) = fromToken ? getTokenDealRange() : getEthDealRange();
@@ -1149,39 +1179,44 @@ contract Etherama {
         return (fromToken ? ethAmount : tokenAmount, totalFeeEth, tokenPrice);
     }
 
-
+    //returns max user's purchase limit in tokens if _hasMaxPurchaseLimit pamam is set true. If it is a user cannot by more tokens that hs already bought on some other exchange
     function getUserMaxPurchase(address userAddress) public view returns(uint256) {
         return _token.balanceOf(userAddress) - SafeMath.mul(getUserLocalTokenBalance(userAddress), 2);
     }
-    
+    //current urser's max purchase limit in tokens
     function getCurrentUserMaxPurchase() public view returns(uint256) {
         return getUserMaxPurchase(msg.sender);
     }
 
+    //token owener collected reward
     function getTokenOwnerReward() public view returns(uint256) {
         return _data._tokenOwnerReward();
     }
 
+    //current user's won promo bonuses
     function getCurrentUserTotalPromoBonus() public view returns(uint256) {
         return _data.getUserTotalPromoBonus(msg.sender);
     }
 
+    //current user's won big promo bonuses
     function getCurrentUserBigPromoBonus() public view returns(uint256) {
         return _data.getUserBigPromoBonus(msg.sender);
     }
-
+    //current user's won quick promo bonuses
     function getCurrentUserQuickPromoBonus() public view returns(uint256) {
         return _data.getUserQuickPromoBonus(msg.sender);
     }
    
+    //amount of block since core contract is deployed
     function getBlockNumSinceInit() public view returns(uint256) {
         return _core.getBlockNumSinceInit();
     }
 
+    //remaing amount of blocks to win a quick promo bonus
     function getQuickPromoRemainingBlocks() public view returns(uint256) {
         return _core.getQuickPromoRemainingBlocks();
     }
-
+    //remaing amount of blocks to win a big promo bonus
     function getBigPromoRemainingBlocks() public view returns(uint256) {
         return _core.getBigPromoRemainingBlocks();
     } 
