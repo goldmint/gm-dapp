@@ -120,9 +120,10 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     // percent of fee which is supposed to distribute.
     uint256 public _totalIncomeFeePercent = 100 ether;
 
+    // current collected big promo bonus
     uint256 public _currentBigPromoBonus;
+    // current collected quick promo bonus
     uint256 public _currentQuickPromoBonus;
-    uint256 public _totalCollectedPromoBonus;
     
     uint256 public _devReward;
 
@@ -199,22 +200,12 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     
     function addBigPromoBonus() onlyController payable public {
         _currentBigPromoBonus = SafeMath.add(_currentBigPromoBonus, msg.value);
-        addTotalCollectedPromoBonus(msg.value);
     }
     
     function addQuickPromoBonus() onlyController payable public {
         _currentQuickPromoBonus = SafeMath.add(_currentQuickPromoBonus, msg.value);
-        addTotalCollectedPromoBonus(msg.value);
     }
     
-    
-    function addTotalCollectedPromoBonus(uint256 val) internal {
-        _totalCollectedPromoBonus = SafeMath.add(_totalCollectedPromoBonus, val);
-    }
-    
-    function subTotalCollectedPromoBonus(uint256 val) internal {
-        _totalCollectedPromoBonus = SafeMath.sub(_totalCollectedPromoBonus, val);
-    }
     
     function setPromoMinPurchaseEth(uint256 val) onlyAdministrator public {
         _promoMinPurchaseEth = val;
@@ -252,14 +243,12 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     function payoutQuickBonus(address userAddress) onlyController public {
         address dataContractAddress = Etherama(msg.sender).getDataContractAddress();
         _promoQuickBonuses[dataContractAddress][userAddress] = SafeMath.add(_promoQuickBonuses[dataContractAddress][userAddress], _currentQuickPromoBonus);
-        subTotalCollectedPromoBonus(_currentQuickPromoBonus);
         _currentQuickPromoBonus = 0;
     }
     
     function payoutBigBonus(address userAddress) onlyController public {
         address dataContractAddress = Etherama(msg.sender).getDataContractAddress();
         _promoBigBonuses[dataContractAddress][userAddress] = SafeMath.add(_promoBigBonuses[dataContractAddress][userAddress], _currentBigPromoBonus);
-        subTotalCollectedPromoBonus(_currentBigPromoBonus);
         _currentBigPromoBonus = 0;
     }
 
@@ -391,6 +380,9 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         } 
     }
     
+    function getTotalCollectedPromoBonus() public view returns (uint256) {
+        return SafeMath.add(_currentBigPromoBonus, _currentQuickPromoBonus);
+    }
 
     function getUserTotalPromoBonus(address dataContractAddress, address userAddress) public view returns (uint256) {
         return SafeMath.add(_promoQuickBonuses[dataContractAddress][userAddress], _promoBigBonuses[dataContractAddress][userAddress]);
@@ -421,11 +413,13 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     }
 
   
-    function getUserReward(address dataContractAddress, address userAddress, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
+    function getUserReward(address dataContractAddress, address userAddress, bool incShareBonus, bool incRefBonus, bool incPromoBonus) public view returns(uint256 reward) {
         EtheramaData data = EtheramaData(dataContractAddress);
         
-        uint256 reward = data.getBonusPerShare() * data.getActualUserTokenBalance(userAddress);
-        reward = ((reward < data.getUserRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, data.getUserRewardPayouts(userAddress))) / MAGNITUDE;
+        if (incShareBonus) {
+            reward = data.getBonusPerShare() * data.getActualUserTokenBalance(userAddress);
+            reward = ((reward < data.getUserRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, data.getUserRewardPayouts(userAddress))) / MAGNITUDE;
+        }
         
         if (incRefBonus) reward = SafeMath.add(reward, data.getUserRefBalance(userAddress));
         if (incPromoBonus) reward = SafeMath.add(reward, data.getUserTotalPromoBonus(userAddress));
@@ -434,17 +428,37 @@ contract EtheramaCore is EtheramaGasPriceLimit {
     }
     
     //user's total reward from all the tokens on the table. includes share reward + referal bonus + promo bonus
-    function getUserTotalReward(address userAddress, bool incRefBonus, bool incPromoBonus) public view returns(uint256 res) {
+    function getUserTotalReward(address userAddress, bool incShareBonus, bool incRefBonus, bool incPromoBonus) public view returns(uint256 res) {
         for (uint256 i = 0; i < _controllerContractCount; i++) {
             address dataContractAddress = Etherama(_controllerIndexer[i]).getDataContractAddress();
             
-            res = SafeMath.add(res, getUserReward(dataContractAddress, userAddress, incRefBonus, incPromoBonus));
+            res = SafeMath.add(res, getUserReward(dataContractAddress, userAddress, incShareBonus, incRefBonus, incPromoBonus));
         }
     }
- 
+    
     //current user's reward
     function getCurrentUserReward(bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
-        return getUserTotalReward(msg.sender, incRefBonus, incPromoBonus);
+        return getUserTotalReward(msg.sender, true, incRefBonus, incPromoBonus);
+    }
+ 
+    //current user's total reward from all the tokens on the table
+    function getCurrentUserTotalReward() public view returns(uint256) {
+        return getUserTotalReward(msg.sender, true, true, true);
+    }
+    
+    //user's share bonus from all the tokens on the table
+    function getCurrentUserShareBonus() public view returns(uint256) {
+        return getUserTotalReward(msg.sender, true, false, false);
+    }
+    
+    //current user's ref bonus from all the tokens on the table
+    function getCurrentUserRefBonus() public view returns(uint256) {
+        return getUserTotalReward(msg.sender, false, true, false);
+    }
+    
+    //current user's promo bonus from all the tokens on the table
+    function getCurrentUserPromoBonus() public view returns(uint256) {
+        return getUserTotalReward(msg.sender, false, false, true);
     }
     
     //is ref link available for the user
@@ -475,7 +489,7 @@ contract EtheramaCore is EtheramaGasPriceLimit {
 
             address dataContractAddress = Etherama(_controllerIndexer[i]).getDataContractAddress();
             
-            reward = SafeMath.add(reward, getUserReward(dataContractAddress, msg.sender, false, false));
+            reward = SafeMath.add(reward, getUserReward(dataContractAddress, msg.sender, true, false, false));
 
             // add share reward to payouts
             addUserRewardPayouts(dataContractAddress, msg.sender, reward * MAGNITUDE);
@@ -629,7 +643,7 @@ contract EtheramaData {
     }    
 
     function getTotalCollectedPromoBonus() public view returns (uint256) {
-        return _core._totalCollectedPromoBonus();
+        return _core.getTotalCollectedPromoBonus();
     }    
 
     function setTotalSupply(uint256 val) onlyController public {
@@ -666,7 +680,7 @@ contract EtheramaData {
     }
     
     function getUserReward(address userAddress, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
-        return _core.getUserReward(address(this), userAddress, incRefBonus, incPromoBonus);
+        return _core.getUserReward(address(this), userAddress, true, incRefBonus, incPromoBonus);
     }
     
     function getUserTotalPromoBonus(address userAddress) public view returns(uint256) {

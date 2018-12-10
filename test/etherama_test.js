@@ -491,7 +491,6 @@ describe('ETHERARAMA MAIN', function() {
     });
 
 
-    
     it('should make a purchase behalf buyer2', async() => {
 
         var ethAmount = 1.3 * ether;
