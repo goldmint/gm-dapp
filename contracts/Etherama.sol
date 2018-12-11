@@ -743,11 +743,6 @@ contract Etherama {
         _;
     }
     
-    // only people with profits
-    modifier onlyRewardOwners() {
-        require(getCurrentUserReward(true, true) > 0);
-        _;
-    }
 
     // administrators can:
     // -> change minimal amout of tokens to get a ref link.
@@ -1089,23 +1084,12 @@ contract Etherama {
         return getUserLocalTokenBalance(msg.sender);
     }    
 
-    //is referal link available for the user
-    function isRefAvailable(address refAddress) public view returns(bool) {
-        return _core.isRefAvailable(refAddress);
-    }
     //is referal link available for the current user
     function isCurrentUserRefAvailable() public view returns(bool) {
-        return isRefAvailable(msg.sender);
+        return _core.isRefAvailable();
     }
 
-    function getCurrentUserReward(bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
-        return getUserReward(msg.sender, incRefBonus, incPromoBonus);
-    }
-    
-    function getCurrentUserShareReward() public view returns(uint256) {
-        return getUserReward(msg.sender, false, false);
-    }
-    
+
     function getCurrentUserRefBonus() public view returns(uint256) {
         return _data.getUserRefBalance(msg.sender);
     }
@@ -1128,8 +1112,10 @@ contract Etherama {
     }
     
     //user's total reward from all the tokens on the table. includes share reward + referal bonus + promo bonus
-    function getUserReward(address userAddress, bool incRefBonus, bool incPromoBonus) public view returns(uint256) {
-        return _data.getUserReward(userAddress, incRefBonus, incPromoBonus);
+    function getUserReward(address userAddress, bool isTotal) public view returns(uint256) {
+        return isTotal ? 
+            _core.getUserTotalReward(userAddress, true, true, true) :
+            _data.getUserReward(userAddress, true, true);
     }
     
     //price for selling 1 token. mostly useful only for frontend
@@ -1250,7 +1236,7 @@ contract Etherama {
 
         require(tokenAmount > 0 && (SafeMath.add(tokenAmount, getTotalTokenSold()) > getTotalTokenSold()));
 
-        if (refAddress == msg.sender || !isRefAvailable(refAddress)) refAddress = address(0x0);
+        if (refAddress == msg.sender || !_core.isRefAvailable(refAddress)) refAddress = address(0x0);
 
         distributeFee(totalFeeEth, refAddress);
 
