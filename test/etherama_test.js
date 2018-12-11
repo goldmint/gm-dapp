@@ -1274,7 +1274,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
             done();
         })
     });
-return;
+
     it('should close controller', async() => {
         var newAdminEthBalance1 = await web3.eth.getBalance(newAdmin);
         var newAdminTokenBalance1 = await mntContract.balanceOf(newAdmin);

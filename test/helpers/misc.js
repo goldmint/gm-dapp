@@ -816,7 +816,7 @@ function deployEtheramaContract(data,cb){
           tempContract.new(
                mntContractAddress,
                dataContractAddress,
-               1,5,10000,
+               0,5,10000,
                {
                     from: creator, 
                     // should not exceed 5000000 for Kovan by default

@@ -566,7 +566,6 @@ contract EtheramaData {
     function init(address tokenContractAddress, uint64 expPeriodDays, int128 initRealTokenPrice, uint64 priceSpeedPercent, uint64 priceSpeedInterval) public {
         require(_controllerAddress == address(0x0));
         require(tokenContractAddress != address(0x0));
-        require(expPeriodDays > 0);
         require(RealMath.isUInt64ValidIn64(priceSpeedPercent) && priceSpeedPercent > 0);
         require(RealMath.isUInt64ValidIn64(priceSpeedInterval) && priceSpeedInterval > 0);
         
