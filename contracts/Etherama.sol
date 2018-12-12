@@ -514,6 +514,27 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         
         msg.sender.transfer(address(this).balance);
     }
+
+    
+    
+    function calcPercent(uint256 amount, uint256 percent) public pure returns(uint256) {
+        return SafeMath.div(SafeMath.mul(SafeMath.div(amount, 100), percent), 1 ether);
+    }
+
+    //Converts real num to uint256. Works only with positive numbers.
+    function convertRealTo256(int128 realVal) public pure returns(uint256) {
+        int128 roundedVal = RealMath.fromReal(RealMath.mul(realVal, RealMath.toReal(1e12)));
+
+        return SafeMath.mul(uint256(roundedVal), uint256(1e6));
+    }
+
+    //Converts uint256 to real num. Possible a little loose of precision
+    function convert256ToReal(uint256 val) public pure returns(int128) {
+        uint256 intVal = SafeMath.div(val, 1e6);
+        require(RealMath.isUInt256ValidIn64(intVal));
+        
+        return RealMath.fraction(int64(intVal), 1e12);
+    }    
 }
 
 // Data contract for Etherama contract controller. Data contract cannot be changed so no data can be lost. On the other hand Etherama controller can be replaced if some error is found.
@@ -523,11 +544,12 @@ contract EtheramaData {
     
     // token price in the begining
     uint256 constant public TOKEN_PRICE_INITIAL = 0.001 ether;
-    
     // a percent of the token price which adds/subs each _priceSpeedInterval tokens
-    uint64 public _priceSpeedPercent = 5;
-    // Token price speed interval. For instance, if _priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
-    uint64 public _priceSpeedInterval = 10000;
+    uint64 constant public PRICE_SPEED_PERCENT = 5;
+    // Token price speed interval. For instance, if PRICE_SPEED_PERCENT = 5 and PRICE_SPEED_INTERVAL = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
+    uint64 constant public PRICE_SPEED_INTERVAL = 10000;
+    // lock-up period in days. Until this period is expeired nobody can close the contract or withdraw users' funds
+    uint64 constant public EXP_PERIOD_DAYS = 0;
 
     
     mapping(address => bool) private _administrators;
@@ -563,22 +585,19 @@ contract EtheramaData {
         _initBlockNum = block.number;
     }
     
-    function init(address tokenContractAddress, uint64 expPeriodDays, int128 initRealTokenPrice, uint64 priceSpeedPercent, uint64 priceSpeedInterval) public {
+    function init(address tokenContractAddress) public {
         require(_controllerAddress == address(0x0));
         require(tokenContractAddress != address(0x0));
-        require(RealMath.isUInt64ValidIn64(priceSpeedPercent) && priceSpeedPercent > 0);
-        require(RealMath.isUInt64ValidIn64(priceSpeedInterval) && priceSpeedInterval > 0);
+        require(RealMath.isUInt64ValidIn64(PRICE_SPEED_PERCENT) && PRICE_SPEED_PERCENT > 0);
+        require(RealMath.isUInt64ValidIn64(PRICE_SPEED_INTERVAL) && PRICE_SPEED_INTERVAL > 0);
         
         
         _controllerAddress = msg.sender;
 
         _token = IStdToken(tokenContractAddress);
         _initTime = uint64(now);
-        _expirationTime = _initTime + expPeriodDays * 1 days;
-        _realTokenPrice = initRealTokenPrice;
-        
-        _priceSpeedPercent = uint64(priceSpeedPercent);
-        _priceSpeedInterval = uint64(priceSpeedInterval);
+        _expirationTime = _initTime + EXP_PERIOD_DAYS * 1 days;
+        _realTokenPrice = _core.convert256ToReal(TOKEN_PRICE_INITIAL);
     }
     
     function isInited()  public view returns(bool) {
@@ -781,17 +800,13 @@ contract Etherama {
 
     // tokenContractAddress - tranding token address
     // dataContractAddress - data contract address where all the data is collected and separated from the controller
-    // expirationInDays - lock-up period in days. Until this period is expeired nobody can close the contract or withdraw users' funds
-    // priceSpeedPercent - a percent of the token price which adds/subs each _priceSpeedInterval tokens
-    // priceSpeedInterval - Token price speed interval. For instance, if priceSpeedPercent = 5 and _priceSpeedInterval = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
-    constructor(address tokenContractAddress, address dataContractAddress,
-        uint64 expirationInDays, uint64 priceSpeedPercent, uint64 priceSpeedInterval) public {
+    constructor(address tokenContractAddress, address dataContractAddress) public {
         
         require(dataContractAddress != address(0x0));
         _data = EtheramaData(dataContractAddress);
         
         if (!_data.isInited()) {
-            _data.init(tokenContractAddress, expirationInDays, convert256ToReal(_data.TOKEN_PRICE_INITIAL()), priceSpeedPercent, priceSpeedInterval);
+            _data.init(tokenContractAddress);
             _data.addAdministator(msg.sender);
             _creator = msg.sender;
         }
@@ -855,7 +870,7 @@ contract Etherama {
         return purchaseTokens(msg.value, refAddress, minReturn);
     }
 
-    //sell tokens for eth
+    //sell tokens for eth. before call this func you have to call "approve" in the ERC20 token contract
     function sell(uint256 tokenAmount, uint256 minReturn) onlyActive onlyContractUsers validGasPrice public returns(uint256) {
         if (tokenAmount > getCurrentUserLocalTokenBalance() || tokenAmount == 0) return 0;
 
@@ -867,7 +882,7 @@ contract Etherama {
 
         msg.sender.transfer(ethAmount);
 
-        updateTokenPrice(-convert256ToReal(tokenAmount));
+        updateTokenPrice(-_core.convert256ToReal(tokenAmount));
 
         distributeFee(totalFeeEth, address(0x0));
 
@@ -1025,11 +1040,11 @@ contract Etherama {
 
 
     function getPriceSpeedPercent() public view returns(uint64) {
-        return _data._priceSpeedPercent();
+        return _data.PRICE_SPEED_PERCENT();
     }
 
     function getPriceSpeedTokenBlock() public view returns(uint64) {
-        return _data._priceSpeedInterval();
+        return _data.PRICE_SPEED_INTERVAL();
     }
 
     function getMinRefEthPurchase() public view returns (uint256) {
@@ -1050,7 +1065,7 @@ contract Etherama {
 
     //current token price
     function getCurrentTokenPrice() public view returns(uint256) {
-        return convertRealTo256(_data._realTokenPrice());
+        return _core.convertRealTo256(_data._realTokenPrice());
     }
 
     //contract's eth balance
@@ -1246,7 +1261,7 @@ contract Etherama {
 
         checkAndSendPromoBonus(ethAmount);
         
-        updateTokenPrice(convert256ToReal(tokenAmount));
+        updateTokenPrice(_core.convert256ToReal(tokenAmount));
         
         _core.trackBuy(msg.sender, ethAmount, tokenAmount);
 
@@ -1340,7 +1355,7 @@ contract Etherama {
     }
 
     function ethToTokens(uint256 ethAmount, bool isBuy) internal view returns(uint256) {
-        int128 realEthAmount = convert256ToReal(ethAmount);
+        int128 realEthAmount = _core.convert256ToReal(ethAmount);
         int128 t0 = RealMath.div(realEthAmount, _data._realTokenPrice());
         int128 s = getRealPriceSpeed();
 
@@ -1361,22 +1376,22 @@ contract Etherama {
             tn = tn1;
         }
 
-        return convertRealTo256(tn);
+        return _core.convertRealTo256(tn);
     }
 
     function tokensToEth(uint256 tokenAmount, bool isBuy) internal view returns(uint256) {
-        int128 realTokenAmount = convert256ToReal(tokenAmount);
+        int128 realTokenAmount = _core.convert256ToReal(tokenAmount);
         int128 s = getRealPriceSpeed();
         int128 expArg = RealMath.mul(RealMath.mul(realTokenAmount, s), RealMath.toReal(isBuy ? int64(1) : int64(-1)));
         
         int128 realEthAmountFor1Token = RealMath.mul(_data._realTokenPrice(), RealMath.exp(expArg));
         int128 realEthAmount = RealMath.mul(realTokenAmount, realEthAmountFor1Token);
 
-        return convertRealTo256(realEthAmount);
+        return _core.convertRealTo256(realEthAmount);
     }
 
     function calcTotalFee(uint256 tokenAmount, bool isBuy) internal view returns(uint256) {
-        int128 realTokenAmount = convert256ToReal(tokenAmount);
+        int128 realTokenAmount = _core.convert256ToReal(tokenAmount);
         int128 factor = RealMath.toReal(isBuy ? int64(1) : int64(-1));
         int128 rateAfterDeal = calc1RealTokenRateFromRealTokens(RealMath.mul(realTokenAmount, factor));
         int128 delta = RealMath.div(rateAfterDeal - _data._realTokenPrice(), RealMath.toReal(2));
@@ -1385,7 +1400,7 @@ contract Etherama {
         //commission for sells is a bit lower due to rounding error
         if (!isBuy) fee = RealMath.mul(fee, RealMath.fraction(95, 100));
 
-        return calcPercent(convertRealTo256(RealMath.mul(fee, factor)), _core._totalIncomeFeePercent());
+        return _core.calcPercent(_core.convertRealTo256(RealMath.mul(fee, factor)), _core._totalIncomeFeePercent());
     }
 
 
@@ -1397,55 +1412,37 @@ contract Etherama {
     }
     
     function getRealPriceSpeed() internal view returns(int128) {
-        require(RealMath.isUInt64ValidIn64(_data._priceSpeedPercent()));
-        require(RealMath.isUInt64ValidIn64(_data._priceSpeedInterval()));
+        require(RealMath.isUInt64ValidIn64(_data.PRICE_SPEED_PERCENT()));
+        require(RealMath.isUInt64ValidIn64(_data.PRICE_SPEED_INTERVAL()));
         
-        return RealMath.div(RealMath.fraction(int64(_data._priceSpeedPercent()), 100), RealMath.toReal(int64(_data._priceSpeedInterval())));
+        return RealMath.div(RealMath.fraction(int64(_data.PRICE_SPEED_PERCENT()), 100), RealMath.toReal(int64(_data.PRICE_SPEED_INTERVAL())));
     }
 
 
     function calcTotalShareRewardFee(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _core._shareRewardPercent());
+        return _core.calcPercent(totalFee, _core._shareRewardPercent());
     }
     
     function calcRefBonus(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _core._refBonusPercent());
+        return _core.calcPercent(totalFee, _core._refBonusPercent());
     }
     
     function calcTokenOwnerReward(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _core._tokenOwnerRewardPercent());
+        return _core.calcPercent(totalFee, _core._tokenOwnerRewardPercent());
     }
 
     function calcDevReward(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _core._devRewardPercent());
+        return _core.calcPercent(totalFee, _core._devRewardPercent());
     }
 
     function calcQuickPromoBonus(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _core._quickPromoPercent());
+        return _core.calcPercent(totalFee, _core._quickPromoPercent());
     }    
 
     function calcBigPromoBonus(uint256 totalFee) internal view returns(uint256) {
-        return calcPercent(totalFee, _core._bigPromoPercent());
+        return _core.calcPercent(totalFee, _core._bigPromoPercent());
     }        
-    
-    function calcPercent(uint256 amount, uint256 percent) public pure returns(uint256) {
-        return SafeMath.div(SafeMath.mul(SafeMath.div(amount, 100), percent), 1 ether);
-    }
 
-    //Converts real num to uint256. Works only with positive numbers.
-    function convertRealTo256(int128 realVal) internal pure returns(uint256) {
-        int128 roundedVal = RealMath.fromReal(RealMath.mul(realVal, RealMath.toReal(1e12)));
-
-        return SafeMath.mul(uint256(roundedVal), uint256(1e6));
-    }
-
-    //Converts uint256 to real num. Possible a little loose of precision
-    function convert256ToReal(uint256 val) internal pure returns(int128) {
-        uint256 intVal = SafeMath.div(val, 1e6);
-        require(RealMath.isUInt256ValidIn64(intVal));
-        
-        return RealMath.fraction(int64(intVal), 1e12);
-    }
 
 }
 
