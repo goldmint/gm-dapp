@@ -38,12 +38,20 @@ contract EtheramaCommon {
         _administrators[addr] = false;
     }
 
+    function isAdministrator(address addr) public view returns (bool) {
+        return _administrators[addr];
+    }
+
     function addManager(address addr) onlyAdministrator public {
         _managers[addr] = true;
     }
 
     function removeManager(address addr) onlyAdministrator public {
         _managers[addr] = false;
+    }
+    
+    function isManager(address addr) public view returns (bool) {
+        return _managers[addr];
     }
 }
 
@@ -738,6 +746,8 @@ contract Etherama {
     bool public isActive = false;
     bool public isMigrationToNewControllerInProgress = false;
     bool public isActualContractVer = true;
+    address public migrationContractAddress = address(0x0);
+    bool public isMigrationApproved = false;
 
     address private _creator = address(0x0);
     
@@ -772,6 +782,12 @@ contract Etherama {
     // -> suspend the contract
     modifier onlyAdministrator() {
         require(isCurrentUserAdministrator());
+        _;
+    }
+    
+    //core administrator can only approve contract migration after its code review
+    modifier onlyCoreAdministrator() {
+        require(_core.isAdministrator(msg.sender));
         _;
     }
 
@@ -958,20 +974,31 @@ contract Etherama {
         return address(_token);
     }
 
+    // request migration to new contract. After request Etherama dev team should review its code and approve it if it is OK
+    function requestControllerContractMigration(address newControllerAddr) onlyAdministrator public {
+        require(!isMigrationApproved);
+        
+        migrationContractAddress = newControllerAddr;
+    }
     
-    //set new controller address in case of some mistake in the contract and transfer there all the tokens and eth.
-    function setNewControllerContractAddress(address newControllerAddr) onlyAdministrator public {
-        require(newControllerAddr != address(0x0) && isActualContractVer);
-
+    // Dev team gives a pervission to updagrade the contract after code review, transfer all the funds, activate new abilities or fix some errors.
+    function approveControllerContractMigration() onlyCoreAdministrator public {
+        isMigrationApproved = true;
+    }
+    
+    //migrate to new controller contract in case of some mistake in the contract and transfer there all the tokens and eth. It can be done only after code review by Etherama developers.
+    function migrateToNewNewControllerContract() onlyAdministrator public {
+        require(isMigrationApproved && migrationContractAddress != address(0x0) && isActualContractVer);
+        
         isActive = false;
 
-        Etherama newController = Etherama(address(newControllerAddr));
-        _data.setNewControllerAddress(newControllerAddr);
+        Etherama newController = Etherama(address(migrationContractAddress));
+        _data.setNewControllerAddress(migrationContractAddress);
 
         uint256 remainingTokenAmount = getRemainingTokenAmount();
         uint256 ethBalance = getTotalEthBalance();
 
-        if (remainingTokenAmount > 0) _token.transfer(newControllerAddr, remainingTokenAmount); 
+        if (remainingTokenAmount > 0) _token.transfer(migrationContractAddress, remainingTokenAmount); 
         if (ethBalance > 0) newController.migrateFunds.value(ethBalance)();
         
         isActualContractVer = false;

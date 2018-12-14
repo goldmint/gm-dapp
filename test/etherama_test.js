@@ -1204,6 +1204,38 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
 
     });
 
+
+    it('should send migration request', async() => {
+        var migrationContractAddress = await mraContractOld.migrationContractAddress();
+
+        assert(migrationContractAddress == 0x0);
+
+        await mraContractOld.requestControllerContractMigration(mraContractAddress, {from: newAdmin});
+
+        migrationContractAddress = await mraContractOld.migrationContractAddress();
+
+        assert(migrationContractAddress == mraContractAddress);
+    });
+
+    it('should not change controller', function(done) {
+        mraContractOld.migrateToNewNewControllerContract({ from: newAdmin, gas: 300000 }, function(err) {
+            assert.notEqual(err, null);
+            done();
+        });
+    });
+
+    it('should approve migration request', async() => {
+        await mraContractOld.approveControllerContractMigration({ from: creator});
+    });
+
+    it('should not send request request after approving the last request', function(done) {
+        mraContractOld.requestControllerContractMigration(mraContractAddress, {from: newAdmin}, function(err) {
+            assert.notEqual(err, null);
+            done();         
+        });
+
+    });
+
     it('should change controller', async() => {
 
         await mraContractOld.buy(0x0, 1, { from: buyer1, gas: 2900000, value: 2 * ether });
@@ -1220,7 +1252,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
         assert(isAdmin);
 
         await mraContract.prepareForMigration({ from: newAdmin, gas: 300000 });
-        await mraContractOld.setNewControllerContractAddress(mraContractAddress, { from: newAdmin, gas: 300000 });
+        await mraContractOld.migrateToNewNewControllerContract({ from: newAdmin, gas: 300000 });
 
         await coreContract.addControllerContract(mraContractAddress, { from: creator });
         await coreContract.removeControllerContract(mraContractAddressOld, { from: creator });
