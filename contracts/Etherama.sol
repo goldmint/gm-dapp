@@ -294,6 +294,12 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return _bonusesPerShare[dataContractAddress];
     }
     
+    function getTotalBonusPerShare() public view returns (uint256 res) {
+        for (uint256 i = 0; i < _controllerContractCount; i++) {
+            res = SafeMath.add(res, _bonusesPerShare[Etherama(_controllerIndexer[i]).getDataContractAddress()]);
+        }          
+    }
+    
     
     function addBonusPerShare() onlyController payable public {
         EtheramaData data = Etherama(msg.sender)._data();
@@ -366,8 +372,20 @@ contract EtheramaCore is EtheramaGasPriceLimit {
         return _buyCounts[dataContractAddress];
     }
     
+    function getTotalBuyCount() public view returns (uint256 res) {
+        for (uint256 i = 0; i < _controllerContractCount; i++) {
+            res = SafeMath.add(res, _buyCounts[Etherama(_controllerIndexer[i]).getDataContractAddress()]);
+        }         
+    }
+    
     function getSellCount(address dataContractAddress) public view returns (uint256) {
         return _sellCounts[dataContractAddress];
+    }
+    
+    function getTotalSellCount() public view returns (uint256 res) {
+        for (uint256 i = 0; i < _controllerContractCount; i++) {
+            res = SafeMath.add(res, _sellCounts[Etherama(_controllerIndexer[i]).getDataContractAddress()]);
+        }         
     }
 
     function getTotalVolumeEth(address dataContractAddress) public view returns (uint256) {
@@ -557,7 +575,7 @@ contract EtheramaData {
     // Token price speed interval. For instance, if PRICE_SPEED_PERCENT = 5 and PRICE_SPEED_INTERVAL = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
     uint64 constant public PRICE_SPEED_INTERVAL = 10000;
     // lock-up period in days. Until this period is expeired nobody can close the contract or withdraw users' funds
-    uint64 constant public EXP_PERIOD_DAYS = 0;
+    uint64 constant public EXP_PERIOD_DAYS = 7;
 
     
     mapping(address => bool) private _administrators;
@@ -596,6 +614,7 @@ contract EtheramaData {
     function init(address tokenContractAddress) public {
         require(_controllerAddress == address(0x0));
         require(tokenContractAddress != address(0x0));
+        require(EXP_PERIOD_DAYS > 0);
         require(RealMath.isUInt64ValidIn64(PRICE_SPEED_PERCENT) && PRICE_SPEED_PERCENT > 0);
         require(RealMath.isUInt64ValidIn64(PRICE_SPEED_INTERVAL) && PRICE_SPEED_INTERVAL > 0);
         
