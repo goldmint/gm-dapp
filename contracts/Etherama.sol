@@ -575,7 +575,7 @@ contract EtheramaData {
     // Token price speed interval. For instance, if PRICE_SPEED_PERCENT = 5 and PRICE_SPEED_INTERVAL = 10000 it means that after 10000 tokens are bought/sold  token price will increase/decrease for 5%.
     uint64 constant public PRICE_SPEED_INTERVAL = 10000;
     // lock-up period in days. Until this period is expeired nobody can close the contract or withdraw users' funds
-    uint64 constant public EXP_PERIOD_DAYS = 7;
+    uint64 constant public EXP_PERIOD_DAYS = 0;
 
     
     mapping(address => bool) private _administrators;
@@ -614,7 +614,6 @@ contract EtheramaData {
     function init(address tokenContractAddress) public {
         require(_controllerAddress == address(0x0));
         require(tokenContractAddress != address(0x0));
-        require(EXP_PERIOD_DAYS > 0);
         require(RealMath.isUInt64ValidIn64(PRICE_SPEED_PERCENT) && PRICE_SPEED_PERCENT > 0);
         require(RealMath.isUInt64ValidIn64(PRICE_SPEED_INTERVAL) && PRICE_SPEED_INTERVAL > 0);
         
@@ -860,8 +859,8 @@ contract Etherama {
         _data.removeAdministator(addr);
     }
 
-    // transfer ownership of the contract to token owner from contract creator.
-    function transferOwnership(address addr) onlyAdministrator public {
+    // transfer ownership request of the contract to token owner from contract creator. The new administator has to accept ownership to finish the transferring.
+    function transferOwnershipRequest(address addr) onlyAdministrator public {
         addAdministator(addr);
     }
 

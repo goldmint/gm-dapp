@@ -1166,7 +1166,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
     });    
 
     it('should transfer ownership', function(done) {
-        mraContract.transferOwnership(newAdmin, { from: creator }, function(err) {
+        mraContract.transferOwnershipRequest(newAdmin, { from: creator }, function(err) {
             assert.equal(err, null);
 
             mraContract.acceptOwnership({ from: newAdmin }, function(err) {
@@ -1307,7 +1307,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
         })
     });
 
-    it('should close controller', async() => {
+    it('should terminate the controller', async() => {
         var newAdminEthBalance1 = await web3.eth.getBalance(newAdmin);
         var newAdminTokenBalance1 = await mntContract.balanceOf(newAdmin);
         var controllerTokenBalance = await mraContract.getRemainingTokenAmount();
@@ -1327,7 +1327,7 @@ describe('ETHERARAMA NEW CONTROLLER', function(){
         //console.log("newAdminTokenBalance2: " + newAdminTokenBalance2.toString(10));
         //console.log("controllerTokenBalance: " + controllerTokenBalance.toString(10));
 
-        assert(newAdminEthBalance2 > newAdminEthBalance1);
+        assert(newAdminEthBalance2.sub(newAdminEthBalance1) > 0);
         assert.equal(newAdminTokenBalance2.sub(newAdminTokenBalance1).toString(10), controllerTokenBalance.toString(10));
 
     });
