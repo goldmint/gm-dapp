@@ -56,10 +56,6 @@ contract PoolCommon {
 }
 
 contract PoolCore is PoolCommon {
-
-    address constant public MNTP_TOKEN_ADDRESS = address(0x83cee9e086A77e492eE0bB93C2B0437aD6fdECCc);
-    address constant public GOLD_TOKEN_ADDRESS = address(0x61d40B844ea5B68c9C504FCcdB05B68c2D7aE965);
-
     uint256 constant public MAGNITUDE = 2**64;
 
     //MNTP token reward per share
@@ -92,9 +88,9 @@ contract PoolCore is PoolCommon {
         _;
     }
 
-    constructor() PoolCommon() public {
-        mntpToken = IStdToken(MNTP_TOKEN_ADDRESS);
-        goldToken = IStdToken(GOLD_TOKEN_ADDRESS);
+    constructor(address mntpTokenAddr, address goldTokenAddr) PoolCommon() public {
+        mntpToken = IStdToken(mntpTokenAddr);
+        goldToken = IStdToken(goldTokenAddr);
     }
     
     function addHeldTokens(address userAddress, uint256 tokenAmount) onlyController public {

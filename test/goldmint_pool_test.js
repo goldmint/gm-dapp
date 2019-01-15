@@ -21,45 +21,70 @@ var buyer6;
 var mntContractAddress;
 var mntContract;
 
-
 var goldContractAddress;
 var goldContract;
 
+var poolCoreContractAddress;
+var poolCoreContract;
+
+var poolContractAddress;
+var poolContract;
+
+var goldmintTeamAddress;
+var initialBalanceCreator = 0;
+var tokenBankAddress;
 
 function addAccount(pk, name) {
     accounts.push({pubKey: pk, name: name, initTokenBalance: new BigNumber(0)})
 }
+
+eval(fs.readFileSync('./test/helpers/misc.js')+'');
 
 
 describe('GOLDMINT POOL MAIN', function() {
 
     before("Initialize everything", function(done) {
         web3.eth.getAccounts(function(err, as) {
-
              if(err) {
                   done(err);
                   return;
              }
 
-             var i = 0;
-             as.forEach(a => { addAccount(a, i == 0 ? "creator" : "buyer" + i); i++; });
+             accounts = as;
+             creator = accounts[0];
+             creator2 = accounts[1];
+             buyer = accounts[2];
+             goldmintTeamAddress = accounts[3];
+             tokenBankAddress = accounts[4];
+             var data = {};
 
-             creator = as[0];
-             buyer1 = as[1];
-             buyer2 = as[2];
-             buyer3 = as[3];
-             buyer4 = as[4];
-             buyer5 = as[5];
+             deployMntContract(data,function(err){
+              assert.equal(err,null);
+              
+                      deployGoldFeeContract(data,function(err){
+                          assert.equal(err,null);
+      
+                          deployGoldContract(data,function(err){
+                              assert.equal(err,null);
+                              deployGoldmintPoolCoreContract(data,function(err){
+                                assert.equal(err,null);
+                                deployGoldmintPoolContract(data,function(err){
+                                    assert.equal(err,null);
 
-             newAdmin = as[9];
-
-             done();
+                                    done();
+                                });
+                              });
+                          });
+                      });
+              });
         });
     });
 
     after("Deinitialize everything", function(done) {
             done();
-    });   
+    });
+    it('should deploy token contract',function(done){
 
-
+        done();
+   });
 });
