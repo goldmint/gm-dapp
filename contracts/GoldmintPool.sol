@@ -97,9 +97,11 @@ contract PoolCore is PoolCommon {
         goldToken = IStdToken(GOLD_TOKEN_ADDRESS);
     }
     
-    function addHeldTokens(address userAddress, uint256 amount) onlyController public {
-        _userStakes[userAddress] = SafeMath.add(_userStakes[userAddress], amount);
-        totalMntpHeld = SafeMath.add(totalMntpHeld, amount);
+    function addHeldTokens(address userAddress, uint256 tokenAmount) onlyController public {
+        _userStakes[userAddress] = SafeMath.add(_userStakes[userAddress], tokenAmount);
+        totalMntpHeld = SafeMath.add(totalMntpHeld, tokenAmount);
+        
+        addUserPayouts(userAddress, mntpRewardPerShare * tokenAmount, goldRewardPerShare * tokenAmount);
     }
 
     function addRewardPerShare(uint256 mntpReward, uint256 goldReward) onlyController public {
@@ -112,7 +114,7 @@ contract PoolCore is PoolCommon {
         goldRewardPerShare = SafeMath.add(mntpRewardPerShare, goldShareReward);
     }  
     
-    function addUserRewardPayouts(address userAddress, uint256 mntpReward, uint256 goldReward) onlyController public {
+    function addUserPayouts(address userAddress, uint256 mntpReward, uint256 goldReward) onlyController public {
         _rewardMntpPayouts[userAddress] = SafeMath.add(_rewardMntpPayouts[userAddress], mntpReward);
         _rewardGoldPayouts[userAddress] = SafeMath.add(_rewardGoldPayouts[userAddress], goldReward);
     }
@@ -225,7 +227,7 @@ contract GoldmintPool {
         require(getMntpBalance() >= mntpReward);
         require(getGoldBalance() >= goldReward);
         
-        core.addUserRewardPayouts(msg.sender, mntpReward, goldReward);
+        core.addUserPayouts(msg.sender, mntpReward, goldReward);
         
         if (mntpReward > 0) mntpToken.transfer(msg.sender, mntpReward);
         if (goldReward > 0) goldToken.transfer(msg.sender, goldReward);
