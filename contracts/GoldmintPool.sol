@@ -96,7 +96,10 @@ contract PoolCore is PoolCommon {
         mntpToken = IStdToken(MNTP_TOKEN_ADDRESS);
         goldToken = IStdToken(GOLD_TOKEN_ADDRESS);
     }
-
+    
+    function addHeldTokens(uint256 amount) onlyController public {
+        totalMntpHeld = SafeMath.add(totalMntpHeld, amount);
+    }
 
     function addRewardPerShare(uint256 mntpReward, uint256 goldReward) onlyController public {
         require(totalMntpHeld > 0);
@@ -170,18 +173,26 @@ contract GoldmintPool {
         _;
     }
 
-    constructor(address _coreAddress, address _tokenBankAddress) notNullAddress(_coreAddress) notNullAddress(_tokenBankAddress) public { 
-        core = PoolCore(_coreAddress);
+    constructor(address coreAddr, address tokenBankAddr) notNullAddress(coreAddr) notNullAddress(tokenBankAddr) public { 
+        core = PoolCore(coreAddr);
         mntpToken = core.mntpToken();
         goldToken = core.goldToken();
         
-        tokenBankAddress = _tokenBankAddress;
+        tokenBankAddress = tokenBankAddr;
     }
     
     function setTokenBankAddress(address addr) onlyAdministrator notNullAddress(addr) public {
         tokenBankAddress = addr;
     }
-
+    
+    function holdMntpTokens(uint256 amount) public {
+        require(mntpToken.balanceOf(msg.sender) > 0);
+        
+        mntpToken.transferFrom(msg.sender, address(this), amount);
+        
+        core.addHeldTokens(amount);
+    }
+    
     function distribShareProfit(uint256 mntpReward, uint256 goldReward) onlyAdministratorOrManager public {
         if (mntpReward > 0) mntpToken.transferFrom(tokenBankAddress, address(this), mntpReward);
         if (goldReward > 0) goldToken.transferFrom(tokenBankAddress, address(this), goldReward);
@@ -190,8 +201,7 @@ contract GoldmintPool {
         
         emit onDistribShareProfit(mntpReward, goldReward);
     }
-    
-    
+
     function withdrawUserReward() public {
         
         uint256 mntpReward = core.getMntpTokenUserReward(msg.sender);
