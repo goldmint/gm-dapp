@@ -81,7 +81,7 @@ contract PoolCore is PoolCommon {
     mapping(address => uint256) private _rewardMntpPayouts;
     mapping(address => uint256) private _rewardGoldPayouts;
 
-    mapping(address => uint256) private _heldMntpUserBalances;
+    mapping(address => uint256) private _userStakes;
 
     IStdToken public mntpToken;
     IStdToken public goldToken;
@@ -97,7 +97,8 @@ contract PoolCore is PoolCommon {
         goldToken = IStdToken(GOLD_TOKEN_ADDRESS);
     }
     
-    function addHeldTokens(uint256 amount) onlyController public {
+    function addHeldTokens(address userAddress, uint256 amount) onlyController public {
+        _userStakes[userAddress] = SafeMath.add(_userStakes[userAddress], amount);
         totalMntpHeld = SafeMath.add(totalMntpHeld, amount);
     }
 
@@ -117,16 +118,14 @@ contract PoolCore is PoolCommon {
     }
 
     function getMntpTokenUserReward(address userAddress) public view returns(uint256 reward) {  
-
-        reward = mntpRewardPerShare * getUserMntpBalance(userAddress);
+        reward = mntpRewardPerShare * getUserStake(userAddress);
         reward = ((reward < getUserMntpRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, getUserMntpRewardPayouts(userAddress))) / MAGNITUDE;
 
         return reward;
     }
     
     function getGoldTokenUserReward(address userAddress) public view returns(uint256 reward) {  
-
-        reward = goldRewardPerShare * getUserMntpBalance(userAddress);
+        reward = goldRewardPerShare * getUserStake(userAddress);
         reward = ((reward < getUserGoldRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, getUserGoldRewardPayouts(userAddress))) / MAGNITUDE;
 
         return reward;
@@ -140,8 +139,8 @@ contract PoolCore is PoolCommon {
         return _rewardGoldPayouts[userAddress];
     }    
     
-    function getUserMntpBalance(address userAddress) public view returns(uint256) {
-        return _heldMntpUserBalances[userAddress];
+    function getUserStake(address userAddress) public view returns(uint256) {
+        return _userStakes[userAddress];
     }    
 
 }
@@ -157,6 +156,8 @@ contract GoldmintPool {
     
     event onDistribShareProfit(uint256 mntpReward, uint256 goldReward); 
     event onUserRewardWithdrawn(address indexed userAddress, uint256 mntpReward, uint256 goldReward);
+    event onHoldStake(address indexed userAddress, uint256 mntpAmount);
+    event onUnholdStake(address indexed userAddress, uint256 mntpAmount);
 
     modifier onlyAdministrator() {
         require(core.isAdministrator(msg.sender));
@@ -185,12 +186,24 @@ contract GoldmintPool {
         tokenBankAddress = addr;
     }
     
-    function holdMntpTokens(uint256 amount) public {
+    function holdStake(uint256 mntpAmount) public {
         require(mntpToken.balanceOf(msg.sender) > 0);
         
-        mntpToken.transferFrom(msg.sender, address(this), amount);
+        mntpToken.transferFrom(msg.sender, address(this), mntpAmount);
+        core.addHeldTokens(msg.sender, mntpAmount);
         
-        core.addHeldTokens(amount);
+        emit onHoldStake(msg.sender, mntpAmount);
+    }
+    
+    function unholdStake() public {
+        uint256 amount = core.getUserStake(msg.sender);
+        
+        require(amount > 0);
+        require(getMntpBalance() >= amount);
+
+        mntpToken.transfer(msg.sender, amount);
+        
+        emit onUnholdStake(msg.sender, amount);
     }
     
     function distribShareProfit(uint256 mntpReward, uint256 goldReward) onlyAdministratorOrManager public {
@@ -220,7 +233,7 @@ contract GoldmintPool {
         emit onUserRewardWithdrawn(msg.sender, mntpReward, goldReward);
     }
     
-    
+
     // HELPERS
 
     function getMntpBalance() view public returns(uint256) {
