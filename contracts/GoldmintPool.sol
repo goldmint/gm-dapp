@@ -72,7 +72,7 @@ contract PoolCore is PoolCommon {
     //gold reward per share
     mapping(address => uint256) private _goldRewardPerShare;  
 
-    address public controllerAddress;
+    address public _controllerAddress = address(0x0);
 
     mapping(address => uint256) private _rewardMntpPayouts;
     mapping(address => uint256) private _rewardGoldPayouts;
@@ -84,13 +84,17 @@ contract PoolCore is PoolCommon {
 
 
     modifier onlyController() {
-        require(controllerAddress == msg.sender);
+        require(_controllerAddress == msg.sender);
         _;
     }
-
+	
     constructor(address mntpTokenAddr, address goldTokenAddr) PoolCommon() public {
         mntpToken = IStdToken(mntpTokenAddr);
         goldToken = IStdToken(goldTokenAddr);
+    }
+	
+	function setNewControllerAddress(address newAddress) onlyAdministrator public {
+        _controllerAddress = newAddress;
     }
     
     function addHeldTokens(address userAddress, uint256 tokenAmount) onlyController public {
@@ -98,6 +102,11 @@ contract PoolCore is PoolCommon {
         totalMntpHeld = SafeMath.add(totalMntpHeld, tokenAmount);
         
         addUserPayouts(userAddress, SafeMath.mul(mntpRewardPerShare, tokenAmount), SafeMath.mul(goldRewardPerShare, tokenAmount));
+    }
+	
+	function freeHeldTokens(address userAddress, uint256 tokenAmount) onlyController public {
+        _userStakes[userAddress] = SafeMath.sub(_userStakes[userAddress], tokenAmount);
+        totalMntpHeld = SafeMath.sub(totalMntpHeld, tokenAmount);
     }
 
     function addRewardPerShare(uint256 mntpReward, uint256 goldReward) onlyController public {
@@ -186,6 +195,7 @@ contract GoldmintPool {
     
     function holdStake(uint256 mntpAmount) public {
         require(mntpToken.balanceOf(msg.sender) > 0);
+        require(mntpToken.balanceOf(msg.sender) >= mntpAmount);
         
         mntpToken.transferFrom(msg.sender, address(this), mntpAmount);
         core.addHeldTokens(msg.sender, mntpAmount);
@@ -198,7 +208,8 @@ contract GoldmintPool {
         
         require(amount > 0);
         require(getMntpBalance() >= amount);
-
+		
+		core.freeHeldTokens(msg.sender, amount);
         mntpToken.transfer(msg.sender, amount);
         
         emit onUnholdStake(msg.sender, amount);
