@@ -34,6 +34,9 @@ var goldmintTeamAddress;
 var initialBalanceCreator = 0;
 var tokenBankAddress;
 
+var ether = 1000000000000000000;
+
+
 function addAccount(pk, name) {
     accounts.push({pubKey: pk, name: name, initTokenBalance: new BigNumber(0)})
 }
@@ -53,7 +56,7 @@ describe('GOLDMINT POOL MAIN', function() {
              accounts = as;
              creator = accounts[0];
              creator2 = accounts[1];
-             buyer = accounts[2];
+             buyer1 = accounts[2];
              goldmintTeamAddress = accounts[3];
              tokenBankAddress = accounts[4];
              var data = {};
@@ -83,8 +86,26 @@ describe('GOLDMINT POOL MAIN', function() {
     after("Deinitialize everything", function(done) {
             done();
     });
-    it('should deploy token contract',function(done){
 
-        done();
-   });
+    it('should issue tokens to token bank', async() => {
+
+        var mntpTokenAmount = 2000000 * ether;
+        var goldTokenAmount = 1000 * ether;
+        var buyer1TokenAmount = 15000 * ether;
+
+        await mntContract.issueTokens(tokenBankAddress, mntpTokenAmount, { from: creator, gas: 2900000 });
+        await goldContract.issueTokens(tokenBankAddress, goldTokenAmount, { from: creator, gas: 2900000 });
+
+        await mntContract.issueTokens(buyer1, buyer1TokenAmount, { from: creator, gas: 2900000 });
+
+        assert.equal(mntpTokenAmount, mntContract.balanceOf(tokenBankAddress));
+        assert.equal(goldTokenAmount, goldContract.balanceOf(tokenBankAddress));
+        assert.equal(buyer1TokenAmount, mntContract.balanceOf(buyer1));
+
+        await mntContract.approve(poolContractAddress, mntpTokenAmount, { from: tokenBankAddress, gas: 2900000 })
+        await goldContract.approve(poolContractAddress, goldTokenAmount, { from: tokenBankAddress, gas: 2900000 })
+
+    });
+
+
 });
