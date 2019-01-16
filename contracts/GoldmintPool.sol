@@ -72,7 +72,7 @@ contract PoolCore is PoolCommon {
     //gold reward per share
     mapping(address => uint256) private _goldRewardPerShare;  
 
-    address public _controllerAddress = address(0x0);
+    address public controllerAddress = address(0x0);
 
     mapping(address => uint256) private _rewardMntpPayouts;
     mapping(address => uint256) private _rewardGoldPayouts;
@@ -84,7 +84,7 @@ contract PoolCore is PoolCommon {
 
 
     modifier onlyController() {
-        require(_controllerAddress == msg.sender);
+        require(controllerAddress == msg.sender);
         _;
     }
 	
@@ -93,8 +93,8 @@ contract PoolCore is PoolCommon {
         goldToken = IStdToken(goldTokenAddr);
     }
 	
-	function setNewControllerAddress(address newAddress) onlyAdministrator public {
-        _controllerAddress = newAddress;
+	function setNewControllerAddress(address newAddress) onlyController public {
+        controllerAddress = newAddress;
     }
     
     function addHeldTokens(address userAddress, uint256 tokenAmount) onlyController public {
@@ -116,7 +116,7 @@ contract PoolCore is PoolCommon {
         uint256 goldShareReward = (goldReward * MAGNITUDE) / totalMntpHeld;
 
         mntpRewardPerShare = SafeMath.add(mntpRewardPerShare, mntpShareReward);
-        goldRewardPerShare = SafeMath.add(goldRewardPerShare, goldShareReward);
+        goldRewardPerShare = SafeMath.add(mntpRewardPerShare, goldShareReward);
     }  
     
     function addUserPayouts(address userAddress, uint256 mntpReward, uint256 goldReward) onlyController public {
@@ -160,6 +160,9 @@ contract GoldmintPool {
     PoolCore public core;
     IStdToken public mntpToken;
     IStdToken public goldToken;
+
+    bool public isActualContractVer = true;
+    bool public isActive = true;
     
     event onDistribShareProfit(uint256 mntpReward, uint256 goldReward); 
     event onUserRewardWithdrawn(address indexed userAddress, uint256 mntpReward, uint256 goldReward);
@@ -180,6 +183,11 @@ contract GoldmintPool {
         require(addr != address(0x0));
         _;
     }
+    
+    modifier onlyActive() {
+        require(isActive);
+        _;
+    }
 
     constructor(address coreAddr, address tokenBankAddr) notNullAddress(coreAddr) notNullAddress(tokenBankAddr) public { 
         core = PoolCore(coreAddr);
@@ -193,7 +201,12 @@ contract GoldmintPool {
         tokenBankAddress = addr;
     }
     
-    function holdStake(uint256 mntpAmount) public {
+    function switchActive() onlyAdministrator public {
+        require(isActualContractVer);
+        isActive = !isActive;
+    }
+    
+    function holdStake(uint256 mntpAmount) onlyActive public {
         require(mntpToken.balanceOf(msg.sender) > 0);
         require(mntpToken.balanceOf(msg.sender) >= mntpAmount);
         
@@ -203,7 +216,7 @@ contract GoldmintPool {
         emit onHoldStake(msg.sender, mntpAmount);
     }
     
-    function unholdStake() public {
+    function unholdStake() onlyActive public {
         uint256 amount = core.getUserStake(msg.sender);
         
         require(amount > 0);
@@ -215,7 +228,7 @@ contract GoldmintPool {
         emit onUnholdStake(msg.sender, amount);
     }
     
-    function distribShareProfit(uint256 mntpReward, uint256 goldReward) onlyAdministratorOrManager public {
+    function distribShareProfit(uint256 mntpReward, uint256 goldReward) onlyActive onlyAdministratorOrManager public {
         if (mntpReward > 0) mntpToken.transferFrom(tokenBankAddress, address(this), mntpReward);
         if (goldReward > 0) goldToken.transferFrom(tokenBankAddress, address(this), goldReward);
         
@@ -224,8 +237,7 @@ contract GoldmintPool {
         emit onDistribShareProfit(mntpReward, goldReward);
     }
 
-    function withdrawUserReward() public {
-        
+    function withdrawUserReward() onlyActive public {
         uint256 mntpReward = core.getMntpTokenUserReward(msg.sender);
         uint256 goldReward = core.getGoldTokenUserReward(msg.sender);
         
@@ -242,6 +254,22 @@ contract GoldmintPool {
         emit onUserRewardWithdrawn(msg.sender, mntpReward, goldReward);
     }
     
+    //migrate to new controller contract in case of some mistake in the contract and transfer there all the tokens and eth. It can be done only after code review by Etherama developers.
+    function migrateToNewNewControllerContract(address newControllerAddr) onlyAdministrator public {
+        require(newControllerAddr != address(0x0) && isActualContractVer);
+        
+        isActive = false;
+
+        core.setNewControllerAddress(newControllerAddr);
+
+        uint256 mntpTokenAmount = getMntpBalance();
+        uint256 goldTokenAmount = getGoldBalance();
+
+        if (mntpTokenAmount > 0) mntpToken.transfer(newControllerAddr, mntpTokenAmount); 
+        if (goldTokenAmount > 0) goldToken.transfer(newControllerAddr, goldTokenAmount); 
+
+        isActualContractVer = false;
+    }
 
     // HELPERS
 
