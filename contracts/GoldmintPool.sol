@@ -116,7 +116,7 @@ contract PoolCore is PoolCommon {
         uint256 goldShareReward = (goldReward * MAGNITUDE) / totalMntpHeld;
 
         mntpRewardPerShare = SafeMath.add(mntpRewardPerShare, mntpShareReward);
-        goldRewardPerShare = SafeMath.add(goldRewardPerShare, goldShareReward);
+        goldRewardPerShare = SafeMath.add(mntpRewardPerShare, goldShareReward);
     }  
     
     function addUserPayouts(address userAddress, uint256 mntpReward, uint256 goldReward) onlyController public {
@@ -202,10 +202,11 @@ contract GoldmintPool {
     }
     
     function switchActive() onlyAdministrator public {
+        require(isActualContractVer);
         isActive = !isActive;
     }
     
-    function holdStake(uint256 mntpAmount) public {
+    function holdStake(uint256 mntpAmount) onlyActive public {
         require(mntpToken.balanceOf(msg.sender) > 0);
         require(mntpToken.balanceOf(msg.sender) >= mntpAmount);
         
@@ -215,7 +216,7 @@ contract GoldmintPool {
         emit onHoldStake(msg.sender, mntpAmount);
     }
     
-    function unholdStake() public {
+    function unholdStake() onlyActive public {
         uint256 amount = core.getUserStake(msg.sender);
         
         require(amount > 0);
@@ -227,7 +228,7 @@ contract GoldmintPool {
         emit onUnholdStake(msg.sender, amount);
     }
     
-    function distribShareProfit(uint256 mntpReward, uint256 goldReward) onlyAdministratorOrManager public {
+    function distribShareProfit(uint256 mntpReward, uint256 goldReward) onlyActive onlyAdministratorOrManager public {
         if (mntpReward > 0) mntpToken.transferFrom(tokenBankAddress, address(this), mntpReward);
         if (goldReward > 0) goldToken.transferFrom(tokenBankAddress, address(this), goldReward);
         
@@ -237,7 +238,6 @@ contract GoldmintPool {
     }
 
     function withdrawUserReward() onlyActive public {
-        
         uint256 mntpReward = core.getMntpTokenUserReward(msg.sender);
         uint256 goldReward = core.getGoldTokenUserReward(msg.sender);
         
