@@ -97,7 +97,7 @@ contract PoolCore is PoolCommon {
         _userStakes[userAddress] = SafeMath.add(_userStakes[userAddress], tokenAmount);
         totalMntpHeld = SafeMath.add(totalMntpHeld, tokenAmount);
         
-        addUserPayouts(userAddress, mntpRewardPerShare * tokenAmount, goldRewardPerShare * tokenAmount);
+        addUserPayouts(userAddress, SafeMath.mul(mntpRewardPerShare, tokenAmount), SafeMath.mul(goldRewardPerShare, tokenAmount));
     }
 
     function addRewardPerShare(uint256 mntpReward, uint256 goldReward) onlyController public {
