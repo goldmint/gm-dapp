@@ -116,7 +116,7 @@ contract PoolCore is PoolCommon {
         uint256 goldShareReward = (goldReward * MAGNITUDE) / totalMntpHeld;
 
         mntpRewardPerShare = SafeMath.add(mntpRewardPerShare, mntpShareReward);
-        goldRewardPerShare = SafeMath.add(mntpRewardPerShare, goldShareReward);
+        goldRewardPerShare = SafeMath.add(goldRewardPerShare, goldShareReward);
     }  
     
     function addUserPayouts(address userAddress, uint256 mntpReward, uint256 goldReward) onlyController public {

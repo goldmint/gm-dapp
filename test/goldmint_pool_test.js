@@ -37,14 +37,6 @@ var buyer2Stake = 2000 * ether;
 var bankMntDistributionAmount = 128 * ether;
 var bankGoldDistributionAmount = 512 * ether;
 
-function addAccount(pk, name) {
-	accounts.push({
-		pubKey: pk,
-		name: name,
-		initTokenBalance: new BigNumber(0)
-	})
-}
-
 eval(fs.readFileSync('./test/helpers/misc.js') + '');
 
 describe('GOLDMINT POOL MAIN', function () {
@@ -151,10 +143,10 @@ describe('GOLDMINT POOL MAIN', function () {
 
 		assert.equal(poolCoreContract.getUserStake(buyer1), buyer1HoldTokenAmount);
 		assert.equal(poolCoreContract.getUserStake(buyer2), buyer2HoldTokenAmount);
-		assert(poolContract.getMntpBalance().eq(new BigNumber(buyer1HoldTokenAmount + buyer2HoldTokenAmount)));
-		assert(mntContract.balanceOf(poolContractAddress).eq(poolCoreContract.totalMntpHeld()));
-		assert(mntContract.balanceOf(buyer1).eq(0));
-		assert(mntContract.balanceOf(buyer2).eq(0));
+		assert.deepEqual(poolContract.getMntpBalance(), new BigNumber(buyer1HoldTokenAmount + buyer2HoldTokenAmount));
+		assert.deepEqual(mntContract.balanceOf(poolContractAddress), poolCoreContract.totalMntpHeld());
+		assert.deepEqual(mntContract.balanceOf(buyer1), new BigNumber(0));
+		assert.deepEqual(mntContract.balanceOf(buyer2), new BigNumber(0));
 		
 		// additional pool balance (should not be paid out, nor unheld)
 		await mntContract.issueTokens(poolContractAddress, 1 * ether, {
@@ -167,7 +159,7 @@ describe('GOLDMINT POOL MAIN', function () {
 		});
 	});
 	
-	it('should fill bank', async() => {
+	it('should fill bank and distribute', async() => {
 
 		await mntContract.issueTokens(tokenBankAddress, bankMntDistributionAmount, {
 			from: creator,
@@ -181,48 +173,68 @@ describe('GOLDMINT POOL MAIN', function () {
 		assert.equal(bankMntDistributionAmount, mntContract.balanceOf(tokenBankAddress));
 		assert.equal(bankGoldDistributionAmount, goldContract.balanceOf(tokenBankAddress));
 		
-		await mntContract.approve(poolContractAddress, bankMntDistributionAmount / 2, {
+		await mntContract.approve(poolContractAddress, bankMntDistributionAmount, {
 			from: tokenBankAddress,
 			gas: 2900000
 		});
-		await goldContract.approve(poolContractAddress, bankGoldDistributionAmount / 2, {
+		await goldContract.approve(poolContractAddress, bankGoldDistributionAmount, {
 			from: tokenBankAddress,
 			gas: 2900000
 		});
-	});
-	
-	it('should start first distribution', (done) => {
-		// should fail (from non-admin)
-		poolContract.distribShareProfit(bankMntDistributionAmount / 2, bankGoldDistributionAmount / 2, { from: buyer1, gas: 2900000}, (err, res) => {
-			assert.notEqual(err, null);
-			
-			poolContract.distribShareProfit(bankMntDistributionAmount / 2, bankGoldDistributionAmount / 2, { from: creator, gas: 2900000}, (err, res) => {
-				assert.equal(err, null);
-				
-				done();
-			});
-		});
-	});
-	
-	it('should withdraw buyer1 reward and start second distribution', async() => {
-
-		await poolContract.withdrawUserReward({ from: buyer1, gas: 2900000});
 		
-		// fill bank second time
-		await mntContract.approve(poolContractAddress, bankMntDistributionAmount / 2, {
-			from: tokenBankAddress,
-			gas: 2900000
-		});
-		await goldContract.approve(poolContractAddress, bankGoldDistributionAmount / 2, {
-			from: tokenBankAddress,
-			gas: 2900000
-		});
-		await poolContract.distribShareProfit(bankMntDistributionAmount / 2, bankGoldDistributionAmount / 2, { from: creator, gas: 2900000});
+		await poolContract.distribShareProfit(bankMntDistributionAmount, bankGoldDistributionAmount, { from: creator, gas: 2900000});
 	});
 	
-	it('should withdraw both buyers', async() => {
+	it('should withdraw', async() => {
+		
+		assert(mntContract.balanceOf(buyer1).eq(new BigNumber(0)));
+		assert(mntContract.balanceOf(buyer2).eq(new BigNumber(0)));
+		assert(goldContract.balanceOf(buyer1).eq(new BigNumber(0)));
+		assert(goldContract.balanceOf(buyer2).eq(new BigNumber(0)));
 
 		await poolContract.withdrawUserReward({ from: buyer1, gas: 2900000});
 		await poolContract.withdrawUserReward({ from: buyer2, gas: 2900000});
+		
+		var buyer1Mult = buyer1Stake / (buyer1Stake + buyer2Stake);
+		var buyer2Mult = buyer2Stake / (buyer1Stake + buyer2Stake);
+		
+		console.log(
+			"D1/B1:", 
+			new BigNumber(buyer1Mult * bankMntDistributionAmount).toString(), ">=", mntContract.balanceOf(buyer1).toString(10),
+			"&&",
+			new BigNumber(buyer1Mult * bankGoldDistributionAmount).toString(), ">=", goldContract.balanceOf(buyer1).toString(10),
+		);
+		assert(
+			new BigNumber(buyer1Mult * bankMntDistributionAmount).gte(mntContract.balanceOf(buyer1)) &&
+			new BigNumber(buyer1Mult * bankGoldDistributionAmount).gte(goldContract.balanceOf(buyer1))
+		);
+		
+		console.log(
+			"D1/B2:", 
+			new BigNumber(buyer2Mult * bankMntDistributionAmount).toString(), ">=", mntContract.balanceOf(buyer2).toString(10),
+			"&&",
+			new BigNumber(buyer2Mult * bankGoldDistributionAmount).toString(), ">=", goldContract.balanceOf(buyer2).toString(10),
+		);
+		assert(
+			new BigNumber(buyer2Mult * bankMntDistributionAmount).gte(mntContract.balanceOf(buyer2)) &&
+			new BigNumber(buyer2Mult * bankGoldDistributionAmount).gte(goldContract.balanceOf(buyer2))
+		);
 	});
+	
+	// it('should withdraw both buyers', async() => {
+
+		// // fill bank second time
+		// await mntContract.approve(poolContractAddress, bankMntDistributionAmount / 2, {
+			// from: tokenBankAddress,
+			// gas: 2900000
+		// });
+		// await goldContract.approve(poolContractAddress, bankGoldDistributionAmount / 2, {
+			// from: tokenBankAddress,
+			// gas: 2900000
+		// });
+		// await poolContract.distribShareProfit(bankMntDistributionAmount / 2, bankGoldDistributionAmount / 2, { from: creator, gas: 2900000});
+		
+		// await poolContract.withdrawUserReward({ from: buyer1, gas: 2900000});
+		// await poolContract.withdrawUserReward({ from: buyer2, gas: 2900000});
+	// });
 });
