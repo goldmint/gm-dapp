@@ -89,6 +89,7 @@ contract PoolCore is PoolCommon {
     }
 	
     constructor(address mntpTokenAddr, address goldTokenAddr) PoolCommon() public {
+		controllerAddress = msg.sender;
         mntpToken = IStdToken(mntpTokenAddr);
         goldToken = IStdToken(goldTokenAddr);
     }

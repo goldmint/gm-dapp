@@ -93,7 +93,7 @@ describe('GOLDMINT POOL MAIN', function () {
 			from: creator,
 			gas: 2900000
 		});
-		assert.equal(poolCoreContract._controllerAddress(), poolContractAddress);
+		assert.equal(poolCoreContract.controllerAddress(), poolContractAddress);
 	});
 
 	it('should issue tokens', async() => {
@@ -342,7 +342,7 @@ describe('GOLDMINT POOL W1', function () {
 			from: creator,
 			gas: 2900000
 		});
-		assert.equal(poolCoreContract._controllerAddress(), poolContractAddress);
+		assert.equal(poolCoreContract.controllerAddress(), poolContractAddress);
 		
 		// fill buyers
 		await mntContract.issueTokens(buyer1, buyer1Stake, {
@@ -587,9 +587,10 @@ describe('GOLDMINT POOL W1', function () {
 	});
 });
 
-
-// TODO:
 describe('GOLDMINT POOL MIGRATION', function () {
+	
+	var poolContractAddressOld;
+	var poolContractOld;
 
 	before("Initialize everything", function (done) {
 		web3.eth.getAccounts(function (err, as) {
@@ -611,5 +612,108 @@ describe('GOLDMINT POOL MIGRATION', function () {
 		done();
 	});
 
-	it('should ', async() => {});
+	it('should set initial controller', async() => {
+		
+		assert.equal(poolCoreContract.controllerAddress(), creator);
+		
+		// should fail
+		try {
+			await poolCoreContract.setNewControllerAddress(poolContractAddress, {
+				from: buyer1,
+				gas: 2900000
+			});
+			assert.fail("Should fail");
+		} catch {}
+		
+		// creator set controller only once
+		await poolCoreContract.setNewControllerAddress(poolContractAddress, {
+			from: creator,
+			gas: 2900000
+		});
+		assert.equal(poolCoreContract.controllerAddress(), poolContractAddress);
+		
+		// should fail
+		try {
+			await poolCoreContract.setNewControllerAddress(poolContractAddress, {
+				from: creator,
+				gas: 2900000
+			});
+			assert.fail("Should fail");
+		} catch {}
+		
+		// pool is active
+		assert.equal(poolContract.isActive(), true);
+		
+		// fill pool with some tokens
+		await mntContract.issueTokens(poolContractAddress, 1 * ether, {
+			from: creator,
+			gas: 2900000
+		});
+		await goldContract.issueTokens(poolContractAddress, 1 * ether, {
+			from: creator,
+			gas: 2900000
+		});
+	});
+	
+	it("should deploy new pool", function (done) {
+		
+		poolContractAddressOld = poolContractAddress;
+		poolContractOld = poolContract;
+		
+		var data = {};
+		deployGoldmintPoolContract(data, function(err) {
+			assert.equal(err, null);
+		
+			done();
+		});
+	});
+	
+	it('should set new controller', async() => {
+		
+		// flags
+		assert.equal(poolContractOld.isActive(), true);
+		assert.equal(poolContractOld.isActualContractVer(), true);
+		assert.equal(poolContract.isActive(), true);
+		assert.equal(poolContract.isActualContractVer(), true);
+		
+		// tokens
+		assert(poolContractOld.getMntpBalance().gt(0));
+		assert(poolContractOld.getGoldBalance().gt(0));
+		assert(poolContract.getMntpBalance().eq(0));
+		assert(poolContract.getGoldBalance().eq(0));
+
+		// non-admin can't migrate
+		try {
+			await poolContractOld.migrateToNewNewControllerContract(poolContractAddress, {
+				from: buyer1,
+				gas: 2900000
+			});
+			assert.fail("Should fail");
+		} catch {}
+		
+		// migrate
+		await poolContractOld.migrateToNewNewControllerContract(poolContractAddress, {
+			from: creator,
+			gas: 2900000
+		});
+		assert.equal(poolCoreContract.controllerAddress(), poolContractAddress);
+		
+		// flags
+		assert.equal(poolContractOld.isActive(), false);
+		assert.equal(poolContractOld.isActualContractVer(), false);
+		assert.equal(poolContract.isActive(), true);
+		assert.equal(poolContract.isActualContractVer(), true);
+		
+		// admin can switch activity
+		await poolContract.switchActive(poolContractAddress, {
+			from: creator,
+			gas: 2900000
+		});
+		assert.equal(poolContract.isActive(), false);
+		await poolContract.switchActive(poolContractAddress, {
+			from: creator,
+			gas: 2900000
+		});
+		assert.equal(poolContract.isActive(), true);
+	});
 });
