@@ -8,83 +8,66 @@ var BigNumber = require('bignumber.js');
 
 var web3 = new Web3(new Web3.providers.HttpProvider(process.env.ETH_NODE));
 
-var accounts = new Array();
 var creator;
-var buyer1;
-var buyer2;
-var buyer3;
-var buyer4;
-var buyer5;
-var buyer6;
-
+var goldmintTeamAddress;
+var tokenBankAddress;
 
 var mntContractAddress;
 var mntContract;
-
 var goldContractAddress;
 var goldContract;
-
 var poolCoreContractAddress;
 var poolCoreContract;
-
 var poolContractAddress;
 var poolContract;
 
-var goldmintTeamAddress;
-var initialBalanceCreator = 0;
-var tokenBankAddress;
+eval(fs.readFileSync('./test/helpers/misc.js') + '');
 
-function addAccount(pk, name) {
-    accounts.push({pubKey: pk, name: name, initTokenBalance: new BigNumber(0)})
-}
+describe('GOLDMINT POOL MAIN', function () {
 
-eval(fs.readFileSync('./test/helpers/misc.js')+'');
+	before("Initialize everything", function (done) {
+		web3.eth.getAccounts(function (err, as) {
+			if (err) {
+				done(err);
+				return;
+			}
 
+			creator = as[0];
+			goldmintTeamAddress = as[1];
+			tokenBankAddress = as[2];
 
-describe('GOLDMINT POOL MAIN', function() {
+			var data = {};
 
-    before("Initialize everything", function(done) {
-        web3.eth.getAccounts(function(err, as) {
-             if(err) {
-                  done(err);
-                  return;
-             }
+			deployMntContract(data, function (err) {
+				assert.equal(err, null);
 
-             accounts = as;
-             creator = accounts[0];
-             creator2 = accounts[1];
-             buyer = accounts[2];
-             goldmintTeamAddress = accounts[3];
-             tokenBankAddress = accounts[4];
-             var data = {};
+				deployGoldFeeContract(data, function (err) {
+					assert.equal(err, null);
 
-             deployMntContract(data,function(err){
-              assert.equal(err,null);
-              
-                      deployGoldFeeContract(data,function(err){
-                          assert.equal(err,null);
-      
-                          deployGoldContract(data,function(err){
-                              assert.equal(err,null);
-                              deployGoldmintPoolCoreContract(data,function(err){
-                                assert.equal(err,null);
-                                deployGoldmintPoolContract(data,function(err){
-                                    assert.equal(err,null);
+					deployGoldContract(data, function (err) {
+						assert.equal(err, null);
+						
+						deployGoldmintPoolCoreContract(data, function (err) {
+							assert.equal(err, null);
+							
+							deployGoldmintPoolContract(data, function (err) {
+								assert.equal(err, null);
 
-                                    done();
-                                });
-                              });
-                          });
-                      });
-              });
-        });
-    });
+								done();
+							});
+						});
+					});
+				});
+			});
+		});
+	});
 
-    after("Deinitialize everything", function(done) {
-            done();
-    });
-    it('should deploy token contract',function(done){
+	after("Deinitialize everything", function (done) {
+		done();
+	});
+	
+	it('should deploy token contract', function (done) {
 
-        done();
-   });
+		done();
+	});
 });
