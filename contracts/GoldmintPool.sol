@@ -239,10 +239,8 @@ contract GoldmintPool {
     }
 
     function withdrawUserReward() onlyActive public {
-        uint256 mntpReward;
-        uint256 mntpRewardAmp;
-        uint256 goldReward;
-        uint256 goldRewardAmp;
+        uint256 mntpReward; uint256 mntpRewardAmp;
+        uint256 goldReward; uint256 goldRewardAmp;
 
         (mntpReward, mntpRewardAmp) = core.getMntpTokenUserReward(msg.sender);
         (goldReward, goldRewardAmp) = core.getGoldTokenUserReward(msg.sender);
@@ -260,6 +258,22 @@ contract GoldmintPool {
         emit onUserRewardWithdrawn(msg.sender, mntpReward, goldReward);
     }
     
+    function withdrawRewardAndUnholdStake() onlyActive public {
+        withdrawUserReward();
+        unholdStake();
+    }
+    
+    function addRewadToStake() onlyActive public {
+        uint256 mntpReward; uint256 mntpRewardAmp;
+        
+        (mntpReward, mntpRewardAmp) = core.getMntpTokenUserReward(msg.sender);
+        
+        require(mntpReward > 0);
+
+        core.addUserPayouts(msg.sender, mntpRewardAmp, 0);
+        holdStake(mntpReward);   
+    }
+
     //migrate to new controller contract in case of some mistake in the contract and transfer there all the tokens and eth. It can be done only after code review by Etherama developers.
     function migrateToNewNewControllerContract(address newControllerAddr) onlyAdministrator public {
         require(newControllerAddr != address(0x0) && isActualContractVer);
