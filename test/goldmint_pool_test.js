@@ -169,7 +169,7 @@ describe('GOLDMINT POOL MAIN', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 
 		try {
 			await poolContract.withdrawUserReward({
@@ -177,7 +177,7 @@ describe('GOLDMINT POOL MAIN', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 	});
 
 	it('should fill bank and distribute', async () => {
@@ -264,7 +264,7 @@ describe('GOLDMINT POOL MAIN', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 
 		try {
 			await poolContract.withdrawUserReward({
@@ -272,7 +272,7 @@ describe('GOLDMINT POOL MAIN', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 	});
 
 	it('should unhold', async () => {
@@ -525,7 +525,7 @@ describe('GOLDMINT POOL W1', function () {
 					gas: 2900000
 				});
 				assert.fail("Should fail");
-			} catch { }
+			} catch (e) { }
 
 			try {
 				await poolContract.withdrawUserReward({
@@ -533,7 +533,7 @@ describe('GOLDMINT POOL W1', function () {
 					gas: 2900000
 				});
 				assert.fail("Should fail");
-			} catch { }
+			} catch (e) { }
 		}
 	});
 });
@@ -705,7 +705,7 @@ describe('GOLDMINT POOL W2', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 
 		try {
 			await poolContract.withdrawUserReward({
@@ -713,7 +713,7 @@ describe('GOLDMINT POOL W2', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 	});
 
 	it('should fill bank and distribute #1', async () => {
@@ -800,7 +800,7 @@ describe('GOLDMINT POOL W2', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 
 		try {
 			await poolContract.withdrawUserReward({
@@ -808,7 +808,7 @@ describe('GOLDMINT POOL W2', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 	});
 
 	it('should unhold #0', async () => {
@@ -883,7 +883,7 @@ describe('GOLDMINT POOL W2', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch{}
+		} catch (e) {}
 		await poolContract.withdrawUserReward({
 			from: buyer2,
 			gas: 2900000
@@ -924,7 +924,7 @@ describe('GOLDMINT POOL W2', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 
 		try {
 			await poolContract.withdrawUserReward({
@@ -932,7 +932,7 @@ describe('GOLDMINT POOL W2', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 	});
 
 	it('should unhold #1', async () => {
@@ -948,7 +948,7 @@ describe('GOLDMINT POOL W2', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch {}
+		} catch (e) {}
 
 		await poolContract.unholdStake({
 			from: buyer2,
@@ -971,6 +971,267 @@ describe('GOLDMINT POOL W2', function () {
 			goldContract.balanceOf(poolContractAddress).gte(new BigNumber(0 * ether)) &&
 			goldContract.balanceOf(poolContractAddress).lt(new BigNumber(distrApprox * ether))
 		);
+	});
+});
+
+describe('GOLDMINT POOL W3', function () {
+
+	var buyer1ChangedStake;
+
+	before("Initialize everything", function (done) {
+		web3.eth.getAccounts(function (err, as) {
+			assert.equal(err, null);
+
+			creator = as[0];
+			goldmintTeamAddress = as[1];
+			tokenBankAddress = as[2];
+			buyer1 = as[3];
+			buyer2 = as[4];
+
+			deploy(function () {
+				done();
+			});
+		});
+	});
+
+	after("Deinitialize everything", function (done) {
+		done();
+	});
+
+	it('should prepare and hold tokens', async () => {
+
+		// controller
+		await poolCoreContract.setNewControllerAddress(poolContractAddress, {
+			from: creator,
+			gas: 2900000
+		});
+		assert.equal(poolCoreContract.controllerAddress(), poolContractAddress);
+
+		// fill buyers
+		await mntContract.issueTokens(buyer1, buyer1Stake, {
+			from: creator,
+			gas: 2900000
+		});
+		await mntContract.issueTokens(buyer2, buyer2Stake, {
+			from: creator,
+			gas: 2900000
+		});
+		assert.equal(buyer1Stake, mntContract.balanceOf(buyer1));
+		assert.equal(buyer2Stake, mntContract.balanceOf(buyer2));
+
+		// hold first
+		await mntContract.approve(poolContractAddress, buyer1Stake, {
+			from: buyer1,
+			gas: 2900000
+		});
+		await poolContract.holdStake(buyer1Stake, {
+			from: buyer1,
+			gas: 2900000
+		});
+		assert.equal(poolCoreContract.getUserStake(buyer1), buyer1Stake);
+
+		// hold second
+		await mntContract.approve(poolContractAddress, buyer2Stake, {
+			from: buyer2,
+			gas: 2900000
+		});
+		await poolContract.holdStake(buyer2Stake, {
+			from: buyer2,
+			gas: 2900000
+		});
+		assert.equal(poolCoreContract.getUserStake(buyer2), buyer2Stake);
+	});
+
+	it('should distribute', async () => {
+
+		// pool has stake
+		assert.deepEqual(poolCoreContract.getUserStake(buyer1), new BigNumber(buyer1Stake));
+		assert.deepEqual(poolCoreContract.getUserStake(buyer2), new BigNumber(buyer2Stake));
+		assert.deepEqual(poolCoreContract.totalMntpHeld(), new BigNumber(buyer1Stake).add(new BigNumber(buyer2Stake)));
+
+		// fill bank
+		await mntContract.issueTokens(tokenBankAddress, bankMntDistributionAmount, {
+			from: creator,
+			gas: 2900000
+		});
+		await goldContract.issueTokens(tokenBankAddress, bankGoldDistributionAmount, {
+			from: creator,
+			gas: 2900000
+		});
+		assert.deepEqual(new BigNumber(bankMntDistributionAmount), mntContract.balanceOf(tokenBankAddress));
+		assert.deepEqual(new BigNumber(bankGoldDistributionAmount), goldContract.balanceOf(tokenBankAddress));
+
+		// allow bank draining
+		await mntContract.approve(poolContractAddress, bankMntDistributionAmount, {
+			from: tokenBankAddress,
+			gas: 2900000
+		});
+		await goldContract.approve(poolContractAddress, bankGoldDistributionAmount, {
+			from: tokenBankAddress,
+			gas: 2900000
+		});
+
+		var prevPoolBal = {
+			mnt: mntContract.balanceOf(poolContractAddress),
+			gold: goldContract.balanceOf(poolContractAddress),
+		};
+
+		// distribute
+		await poolContract.distribShareProfit(bankMntDistributionAmount, bankGoldDistributionAmount, {
+			from: creator,
+			gas: 2900000
+		});
+
+		// pool is refilled
+		assert.deepEqual(
+			mntContract.balanceOf(poolContractAddress).sub(prevPoolBal.mnt),
+			new BigNumber(bankMntDistributionAmount)
+		);
+		assert.deepEqual(
+			goldContract.balanceOf(poolContractAddress).sub(prevPoolBal.gold),
+			new BigNumber(bankGoldDistributionAmount)
+		);
+
+		var stakes = [
+			new BigNumber(buyer1Stake).div(new BigNumber(buyer1Stake + buyer2Stake)),
+			new BigNumber(buyer2Stake).div(new BigNumber(buyer1Stake + buyer2Stake))
+		];
+		var expectedReward  = [
+			{ mnt: stakes[0].mul(bankMntDistributionAmount), gold: stakes[0].mul(bankGoldDistributionAmount) },
+			{ mnt: stakes[1].mul(bankMntDistributionAmount), gold: stakes[1].mul(bankGoldDistributionAmount) },
+		];
+		var actualReward  = [
+			{ mnt: poolCoreContract.getMntpTokenUserReward(buyer1)[0], gold: poolCoreContract.getGoldTokenUserReward(buyer1)[0] },
+			{ mnt: poolCoreContract.getMntpTokenUserReward(buyer2)[0], gold: poolCoreContract.getGoldTokenUserReward(buyer2)[0] },
+		];
+
+		// compare expected/actual
+		actualReward.forEach((v, i) => {
+			assert(equalApprox(v.mnt, expectedReward[i].mnt));
+			assert(equalApprox(v.gold, expectedReward[i].gold));
+		});
+	});
+
+	it('b1 should reinvest', async () => {
+
+		var reward = {
+			mnt: poolCoreContract.getMntpTokenUserReward(buyer1)[0],
+			gold: poolCoreContract.getGoldTokenUserReward(buyer1)[0]
+		};
+
+		// add mnt reward to stake
+		await poolContract.addRewadToStake({
+			from: buyer1,
+			gas: 2900000
+		});
+
+		// withdraw
+		await poolContract.withdrawUserReward({
+			from: buyer1,
+			gas: 2900000
+		});
+
+		// got additional stake
+		assert.deepEqual(poolCoreContract.getUserStake(buyer1), new BigNumber(buyer1Stake).add(reward.mnt));
+
+		// got gold reward but not mnt
+		assert.deepEqual(mntContract.balanceOf(buyer1), new BigNumber(0));
+		assert.deepEqual(goldContract.balanceOf(buyer1), reward.gold);
+
+		// reward now is 0
+		assert.deepEqual(poolCoreContract.getMntpTokenUserReward(buyer1)[0], new BigNumber(0));
+		assert.deepEqual(poolCoreContract.getGoldTokenUserReward(buyer1)[0], new BigNumber(0));
+
+		buyer1ChangedStake = poolCoreContract.getUserStake(buyer1);
+	});
+
+	it('b2 should withdraw reward and unhold stake', async () => {
+
+		var reward = {
+			mnt: poolCoreContract.getMntpTokenUserReward(buyer2)[0],
+			gold: poolCoreContract.getGoldTokenUserReward(buyer2)[0]
+		};
+
+		// withdraw and unhold
+		await poolContract.withdrawRewardAndUnholdStake({
+			from: buyer2,
+			gas: 2900000
+		});
+
+		// withdraw should fail now
+		try {
+			await poolContract.withdrawUserReward({
+				from: buyer2,
+				gas: 2900000
+			});
+			assert.fail("Should fail");
+		} catch (e) {}
+
+		// stake is 0
+		assert.deepEqual(poolCoreContract.getUserStake(buyer2), new BigNumber(0));
+
+		// got reward and stake
+		assert.deepEqual(mntContract.balanceOf(buyer2), reward.mnt.add(new BigNumber(buyer2Stake)));
+		assert.deepEqual(goldContract.balanceOf(buyer2), reward.gold);
+
+		// reward now is 0
+		assert.deepEqual(poolCoreContract.getMntpTokenUserReward(buyer2)[0], new BigNumber(0));
+		assert.deepEqual(poolCoreContract.getGoldTokenUserReward(buyer2)[0], new BigNumber(0));
+	});
+
+	it('should distribute one more time', async () => {
+		
+		// pool has stake
+		assert.deepEqual(poolCoreContract.getUserStake(buyer1), buyer1ChangedStake);
+		assert.deepEqual(poolCoreContract.getUserStake(buyer2), new BigNumber(0));
+		assert.deepEqual(poolCoreContract.totalMntpHeld(), buyer1ChangedStake);
+
+		// fill bank
+		await mntContract.issueTokens(tokenBankAddress, bankMntDistributionAmount, {
+			from: creator,
+			gas: 2900000
+		});
+		await goldContract.issueTokens(tokenBankAddress, bankGoldDistributionAmount, {
+			from: creator,
+			gas: 2900000
+		});
+		assert.deepEqual(new BigNumber(bankMntDistributionAmount), mntContract.balanceOf(tokenBankAddress));
+		assert.deepEqual(new BigNumber(bankGoldDistributionAmount), goldContract.balanceOf(tokenBankAddress));
+
+		// allow bank draining
+		await mntContract.approve(poolContractAddress, bankMntDistributionAmount, {
+			from: tokenBankAddress,
+			gas: 2900000
+		});
+		await goldContract.approve(poolContractAddress, bankGoldDistributionAmount, {
+			from: tokenBankAddress,
+			gas: 2900000
+		});
+
+		// distribute
+		await poolContract.distribShareProfit(bankMntDistributionAmount, bankGoldDistributionAmount, {
+			from: creator,
+			gas: 2900000
+		});
+	
+		var stakes = [
+			new BigNumber(1),
+			new BigNumber(0)
+		];
+		var expectedReward  = [
+			{ mnt: stakes[0].mul(bankMntDistributionAmount), gold: stakes[0].mul(bankGoldDistributionAmount) },
+			{ mnt: stakes[1].mul(bankMntDistributionAmount), gold: stakes[1].mul(bankGoldDistributionAmount) },
+		];
+		var actualReward  = [
+			{ mnt: poolCoreContract.getMntpTokenUserReward(buyer1)[0], gold: poolCoreContract.getGoldTokenUserReward(buyer1)[0] },
+			{ mnt: poolCoreContract.getMntpTokenUserReward(buyer2)[0], gold: poolCoreContract.getGoldTokenUserReward(buyer2)[0] },
+		];
+
+		// compare expected/actual
+		actualReward.forEach((v, i) => {
+			assert(equalApprox(v.mnt, expectedReward[i].mnt));
+			assert(equalApprox(v.gold, expectedReward[i].gold));
+		});
 	});
 });
 
@@ -1010,7 +1271,7 @@ describe('GOLDMINT POOL MIGRATION', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 
 		// creator set controller only once
 		await poolCoreContract.setNewControllerAddress(poolContractAddress, {
@@ -1026,7 +1287,7 @@ describe('GOLDMINT POOL MIGRATION', function () {
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 
 		// pool is active
 		assert.equal(poolContract.isActive(), true);
@@ -1071,15 +1332,15 @@ describe('GOLDMINT POOL MIGRATION', function () {
 
 		// non-admin can't migrate
 		try {
-			await poolContractOld.migrateToNewNewControllerContract(poolContractAddress, {
+			await poolContractOld.migrateToNewControllerContract(poolContractAddress, {
 				from: buyer1,
 				gas: 2900000
 			});
 			assert.fail("Should fail");
-		} catch { }
+		} catch (e) { }
 
 		// migrate
-		await poolContractOld.migrateToNewNewControllerContract(poolContractAddress, {
+		await poolContractOld.migrateToNewControllerContract(poolContractAddress, {
 			from: creator,
 			gas: 2900000
 		});

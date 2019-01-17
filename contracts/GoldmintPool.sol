@@ -275,7 +275,7 @@ contract GoldmintPool {
     }
 
     //migrate to new controller contract in case of some mistake in the contract and transfer there all the tokens and eth. It can be done only after code review by Etherama developers.
-    function migrateToNewNewControllerContract(address newControllerAddr) onlyAdministrator public {
+    function migrateToNewControllerContract(address newControllerAddr) onlyAdministrator public {
         require(newControllerAddr != address(0x0) && isActualContractVer);
         
         isActive = false;
