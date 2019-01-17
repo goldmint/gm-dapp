@@ -89,12 +89,12 @@ contract PoolCore is PoolCommon {
     }
 	
     constructor(address mntpTokenAddr, address goldTokenAddr) PoolCommon() public {
-		controllerAddress = msg.sender;
+        controllerAddress = msg.sender;
         mntpToken = IStdToken(mntpTokenAddr);
         goldToken = IStdToken(goldTokenAddr);
     }
 	
-	function setNewControllerAddress(address newAddress) onlyController public {
+    function setNewControllerAddress(address newAddress) onlyController public {
         controllerAddress = newAddress;
     }
     
@@ -105,7 +105,7 @@ contract PoolCore is PoolCommon {
         addUserPayouts(userAddress, SafeMath.mul(mntpRewardPerShare, tokenAmount), SafeMath.mul(goldRewardPerShare, tokenAmount));
     }
 	
-	function freeHeldTokens(address userAddress, uint256 tokenAmount) onlyController public {
+    function freeHeldTokens(address userAddress, uint256 tokenAmount) onlyController public {
         _userStakes[userAddress] = SafeMath.sub(_userStakes[userAddress], tokenAmount);
         totalMntpHeld = SafeMath.sub(totalMntpHeld, tokenAmount);
     }
@@ -117,7 +117,7 @@ contract PoolCore is PoolCommon {
         uint256 goldShareReward = (goldReward * MAGNITUDE) / totalMntpHeld;
 
         mntpRewardPerShare = SafeMath.add(mntpRewardPerShare, mntpShareReward);
-        goldRewardPerShare = SafeMath.add(mntpRewardPerShare, goldShareReward);
+        goldRewardPerShare = SafeMath.add(goldRewardPerShare, goldShareReward);
     }  
     
     function addUserPayouts(address userAddress, uint256 mntpReward, uint256 goldReward) onlyController public {
@@ -125,18 +125,18 @@ contract PoolCore is PoolCommon {
         _rewardGoldPayouts[userAddress] = SafeMath.add(_rewardGoldPayouts[userAddress], goldReward);
     }
 
-    function getMntpTokenUserReward(address userAddress) public view returns(uint256 reward) {  
-        reward = mntpRewardPerShare * getUserStake(userAddress);
-        reward = ((reward < getUserMntpRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, getUserMntpRewardPayouts(userAddress))) / MAGNITUDE;
-
-        return reward;
+    function getMntpTokenUserReward(address userAddress) public view returns(uint256 reward, uint256 rewardAmp) {  
+        rewardAmp = mntpRewardPerShare * getUserStake(userAddress);
+        rewardAmp = (rewardAmp < getUserMntpRewardPayouts(userAddress)) ? 0 : SafeMath.sub(rewardAmp, getUserMntpRewardPayouts(userAddress));
+        reward = rewardAmp / MAGNITUDE;
+        return (reward, rewardAmp);
     }
     
-    function getGoldTokenUserReward(address userAddress) public view returns(uint256 reward) {  
-        reward = goldRewardPerShare * getUserStake(userAddress);
-        reward = ((reward < getUserGoldRewardPayouts(userAddress)) ? 0 : SafeMath.sub(reward, getUserGoldRewardPayouts(userAddress))) / MAGNITUDE;
-
-        return reward;
+    function getGoldTokenUserReward(address userAddress) public view returns(uint256 reward, uint256 rewardAmp) {  
+        rewardAmp = goldRewardPerShare * getUserStake(userAddress);
+        rewardAmp = (rewardAmp < getUserGoldRewardPayouts(userAddress)) ? 0 : SafeMath.sub(rewardAmp, getUserGoldRewardPayouts(userAddress));
+        reward = rewardAmp / MAGNITUDE;
+        return (reward, rewardAmp);
     }
     
     function getUserMntpRewardPayouts(address userAddress) public view returns(uint256) {
@@ -223,7 +223,7 @@ contract GoldmintPool {
         require(amount > 0);
         require(getMntpBalance() >= amount);
 		
-		core.freeHeldTokens(msg.sender, amount);
+        core.freeHeldTokens(msg.sender, amount);
         mntpToken.transfer(msg.sender, amount);
         
         emit onUnholdStake(msg.sender, amount);
@@ -239,15 +239,20 @@ contract GoldmintPool {
     }
 
     function withdrawUserReward() onlyActive public {
-        uint256 mntpReward = core.getMntpTokenUserReward(msg.sender);
-        uint256 goldReward = core.getGoldTokenUserReward(msg.sender);
-        
+        uint256 mntpReward;
+        uint256 mntpRewardAmp;
+        uint256 goldReward;
+        uint256 goldRewardAmp;
+
+        (mntpReward, mntpRewardAmp) = core.getMntpTokenUserReward(msg.sender);
+        (goldReward, goldRewardAmp) = core.getGoldTokenUserReward(msg.sender);
+
         require(mntpReward > 0 || goldReward > 0);
         
         require(getMntpBalance() >= mntpReward);
         require(getGoldBalance() >= goldReward);
-        
-        core.addUserPayouts(msg.sender, mntpReward, goldReward);
+
+        core.addUserPayouts(msg.sender, mntpRewardAmp, goldRewardAmp);
         
         if (mntpReward > 0) mntpToken.transfer(msg.sender, mntpReward);
         if (goldReward > 0) goldToken.transfer(msg.sender, goldReward);
