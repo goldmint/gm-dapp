@@ -271,7 +271,7 @@ contract GoldmintPool {
         require(mntpReward > 0);
 
         core.addUserPayouts(msg.sender, mntpRewardAmp, 0);
-        holdStake(mntpReward);   
+        core.addHeldTokens(msg.sender, mntpReward);
     }
 
     //migrate to new controller contract in case of some mistake in the contract and transfer there all the tokens and eth. It can be done only after code review by Etherama developers.
