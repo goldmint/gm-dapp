@@ -291,6 +291,30 @@ contract GoldmintPool {
         isActualContractVer = false;
     }
 
+    function getMntpTokenUserReward() public view returns(uint256) {  
+        uint256 mntpReward; uint256 mntpRewardAmp;
+        (mntpReward, mntpRewardAmp) = core.getMntpTokenUserReward(msg.sender);
+        return mntpReward;
+    }
+    
+    function getGoldTokenUserReward() public view returns(uint256) {  
+        uint256 goldReward; uint256 goldRewardAmp;
+        (goldReward, goldRewardAmp) = core.getGoldTokenUserReward(msg.sender);
+        return goldReward;
+    }
+    
+    function getUserMntpRewardPayouts() public view returns(uint256) {
+        return core.getUserMntpRewardPayouts(msg.sender);
+    }    
+    
+    function getUserGoldRewardPayouts() public view returns(uint256) {
+        return core.getUserGoldRewardPayouts(msg.sender);
+    }    
+    
+    function getUserStake() public view returns(uint256) {
+        return core.getUserStake(msg.sender);
+    } 
+
     // HELPERS
 
     function getMntpBalance() view public returns(uint256) {
