@@ -245,8 +245,6 @@ contract GoldmintPool {
         (mntpReward, mntpRewardAmp) = core.getMntpTokenUserReward(msg.sender);
         (goldReward, goldRewardAmp) = core.getGoldTokenUserReward(msg.sender);
 
-        require(mntpReward > 0 || goldReward > 0);
-        
         require(getMntpBalance() >= mntpReward);
         require(getGoldBalance() >= goldReward);
 
