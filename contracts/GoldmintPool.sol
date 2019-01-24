@@ -113,8 +113,8 @@ contract PoolCore is PoolCommon {
     function addRewardPerShare(uint256 mntpReward, uint256 goldReward) onlyController public {
         require(totalMntpHeld > 0);
 
-        uint256 mntpShareReward = (mntpReward * MAGNITUDE) / totalMntpHeld;
-        uint256 goldShareReward = (goldReward * MAGNITUDE) / totalMntpHeld;
+        uint256 mntpShareReward = SafeMath.div(SafeMath.mul(mntpReward, MAGNITUDE), totalMntpHeld);
+        uint256 goldShareReward = SafeMath.div(SafeMath.mul(goldReward, MAGNITUDE), totalMntpHeld);
 
         mntpRewardPerShare = SafeMath.add(mntpRewardPerShare, mntpShareReward);
         goldRewardPerShare = SafeMath.add(goldRewardPerShare, goldShareReward);
@@ -126,16 +126,18 @@ contract PoolCore is PoolCommon {
     }
 
     function getMntpTokenUserReward(address userAddress) public view returns(uint256 reward, uint256 rewardAmp) {  
-        rewardAmp = mntpRewardPerShare * getUserStake(userAddress);
+        rewardAmp = SafeMath.mul(mntpRewardPerShare, getUserStake(userAddress));
         rewardAmp = (rewardAmp < getUserMntpRewardPayouts(userAddress)) ? 0 : SafeMath.sub(rewardAmp, getUserMntpRewardPayouts(userAddress));
-        reward = rewardAmp / MAGNITUDE;
+        reward = SafeMath.div(rewardAmp, MAGNITUDE);
+        
         return (reward, rewardAmp);
     }
     
     function getGoldTokenUserReward(address userAddress) public view returns(uint256 reward, uint256 rewardAmp) {  
-        rewardAmp = goldRewardPerShare * getUserStake(userAddress);
+        rewardAmp = SafeMath.mul(goldRewardPerShare, getUserStake(userAddress));
         rewardAmp = (rewardAmp < getUserGoldRewardPayouts(userAddress)) ? 0 : SafeMath.sub(rewardAmp, getUserGoldRewardPayouts(userAddress));
-        reward = rewardAmp / MAGNITUDE;
+        reward = SafeMath.div(rewardAmp, MAGNITUDE);
+        
         return (reward, rewardAmp);
     }
     
