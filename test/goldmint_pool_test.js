@@ -29,7 +29,7 @@ var initialBalanceCreator = 0;
 var tokenBankAddress;
 
 var ether = 1000000000000000000;
-var verbose = true;
+var verbose = false;
 var distrApprox = 0.000001 * ether;
 
 var buyer1Stake = 8000 * ether;
@@ -1240,9 +1240,6 @@ describe('GOLDMINT POOL W4', function () {
 	var poolContractAddressOld;
 	var poolContractOld;
 
-	buyer1Stake = new BigNumber(9000).mul(ether); 
-	buyer2Stake = new BigNumber(10000).mul(ether); 
-
 	before("Initialize everything", function (done) {
 		web3.eth.getAccounts(function (err, as) {
 			assert.equal(err, null);
@@ -1252,6 +1249,9 @@ describe('GOLDMINT POOL W4', function () {
 			tokenBankAddress = as[2];
 			buyer1 = as[3];
 			buyer2 = as[0];
+
+			buyer1Stake = new BigNumber(9000).mul(ether); 
+			buyer2Stake = new BigNumber(10000).mul(ether); 
 
 			deploy(function () {
 				done();
