@@ -29,7 +29,7 @@ var initialBalanceCreator = 0;
 var tokenBankAddress;
 
 var ether = 1000000000000000000;
-var verbose = false;
+var verbose = true;
 var distrApprox = 0.000001 * ether;
 
 var buyer1Stake = 8000 * ether;
@@ -301,7 +301,7 @@ describe('GOLDMINT POOL MAIN', function () {
 		assert.deepEqual(buyer1GoldBal, goldContract.balanceOf(buyer1));
 		assert.deepEqual(buyer2GoldBal, goldContract.balanceOf(buyer2));
 
-		// pool valud is almost empty
+		// pool value is almost empty
 		assert.deepEqual(poolCoreContract.totalMntpHeld(), new BigNumber(0));
 
 		// actual pool address balance (remember 100 mnt/gold)
@@ -382,7 +382,7 @@ describe('GOLDMINT POOL W1', function () {
 
 	it('should distribute and withdraw multiple times', async () => {
 
-		for (var c = 0; c < 2; c++) {
+		for (var c = 0; c < 3; c++) {
 			
 			if (verbose) {
 				console.log("Distribution", "#"+c);
@@ -534,6 +534,36 @@ describe('GOLDMINT POOL W1', function () {
 				});
 				assert.fail("Should fail");
 			} catch (e) { }
+			
+			// b1 unhold/hold between distributions
+			if (c == 1) {
+				// current users balance
+				var buyer1MntBal = mntContract.balanceOf(buyer1);
+				var buyer1GoldBal = goldContract.balanceOf(buyer1);
+
+				// unhold
+				await poolContract.unholdStake({
+					from: buyer1,
+					gas: 2900000
+				});
+
+				// mnt unheld
+				assert.deepEqual(buyer1MntBal.add(new BigNumber(buyer1Stake)), mntContract.balanceOf(buyer1));
+
+				// gold didn't change
+				assert.deepEqual(buyer1GoldBal, goldContract.balanceOf(buyer1));
+				
+				// hold
+				await mntContract.approve(poolContractAddress, buyer1Stake, {
+					from: buyer1,
+					gas: 2900000
+				});
+				await poolContract.holdStake(buyer1Stake, {
+					from: buyer1,
+					gas: 2900000
+				});
+				assert.equal(poolCoreContract.getUserStake(buyer1), buyer1Stake);
+			}
 		}
 	});
 });
@@ -594,7 +624,7 @@ describe('GOLDMINT POOL W2', function () {
 		assert.equal(bankGoldDistributionAmount, goldContract.balanceOf(tokenBankAddress));
 	});
 
-	it('should hold user tokens #0', async () => {
+	it('should hold 50% of buyer1 stake and 100% of buyer 2 stake', async () => {
 
 		// hold first (half)
 		await mntContract.approve(poolContractAddress, buyer1Stake, {
@@ -619,7 +649,7 @@ describe('GOLDMINT POOL W2', function () {
 		assert.equal(poolCoreContract.getUserStake(buyer2), buyer2Stake);
 	});
 
-	it('should distribute #0', async () => {
+	it('should distribute (1)', async () => {
 
 		// allow distribution
 		await mntContract.approve(poolContractAddress, bankMntDistributionAmount, {
@@ -636,9 +666,15 @@ describe('GOLDMINT POOL W2', function () {
 			from: creator,
 			gas: 2900000
 		});
+		
+		// current user balance
+		// var prevBuyerBalance = [
+			// { mnt: mntContract.balanceOf(buyer1), gold: goldContract.balanceOf(buyer1), mntPayout: poolCoreContract.getUserMntpRewardPayouts(buyer1), goldPayout: poolCoreContract.getUserGoldRewardPayouts(buyer1) },
+			// { mnt: mntContract.balanceOf(buyer2), gold: goldContract.balanceOf(buyer2), mntPayout: poolCoreContract.getUserMntpRewardPayouts(buyer2), goldPayout: poolCoreContract.getUserGoldRewardPayouts(buyer2) }
+		// ];
 	});
 
-	it('should hold user tokens #1', async () => {
+	it('should hold remaining 50% of buyer1 stake', async () => {
 
 		// hold first
 		await poolContract.holdStake(buyer1Stake / 2, {
@@ -652,7 +688,7 @@ describe('GOLDMINT POOL W2', function () {
 		assert.deepEqual(mntContract.balanceOf(buyer2), new BigNumber(0));
 	});
 
-	it('should withdraw #0', async () => {
+	it('should withdraw for both buyers', async () => {
 
 		// empty accs
 		assert.deepEqual(mntContract.balanceOf(buyer1), new BigNumber(0));
@@ -716,7 +752,7 @@ describe('GOLDMINT POOL W2', function () {
 		} catch (e) { }
 	});
 
-	it('should fill bank and distribute #1', async () => {
+	it('should fill bank and distribute (2)', async () => {
 
 		// fill bank
 		await mntContract.issueTokens(tokenBankAddress, bankMntDistributionAmount, {
@@ -747,7 +783,7 @@ describe('GOLDMINT POOL W2', function () {
 		});
 	});
 
-	it('should withdraw #1', async () => {
+	it('should withdraw for both buyers', async () => {
 
 		// current users balance
 		var buyer1MntBal = mntContract.balanceOf(buyer1);
@@ -811,7 +847,7 @@ describe('GOLDMINT POOL W2', function () {
 		} catch (e) { }
 	});
 
-	it('should unhold #0', async () => {
+	it('should unhold buyer1 stake', async () => {
 
 		// current users balance
 		var buyer1MntBal = mntContract.balanceOf(buyer1);
@@ -837,7 +873,7 @@ describe('GOLDMINT POOL W2', function () {
 		assert.deepEqual(poolCoreContract.totalMntpHeld(), new BigNumber(buyer2Stake));
 	});
 
-	it('should fill bank and distribute #2', async () => {
+	it('should fill bank and distribute (3)', async () => {
 
 		// fill bank
 		await mntContract.issueTokens(tokenBankAddress, bankMntDistributionAmount, {
@@ -868,7 +904,7 @@ describe('GOLDMINT POOL W2', function () {
 		});
 	});
 
-	it('should withdraw #2', async () => {
+	it('should withdraw only for buyer2', async () => {
 
 		// current users balance
 		var buyer1MntBal = mntContract.balanceOf(buyer1);
@@ -935,7 +971,7 @@ describe('GOLDMINT POOL W2', function () {
 		} catch (e) { }
 	});
 
-	it('should unhold #1', async () => {
+	it('should unhold only buyer2 stake', async () => {
 
 		// current users balance
 		var buyer2MntBal = mntContract.balanceOf(buyer2);

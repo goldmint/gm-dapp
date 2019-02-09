@@ -105,9 +105,11 @@ contract PoolCore is PoolCommon {
         addUserPayouts(userAddress, SafeMath.mul(mntpRewardPerShare, tokenAmount), SafeMath.mul(goldRewardPerShare, tokenAmount));
     }
 	
-    function freeHeldTokens(address userAddress, uint256 tokenAmount) onlyController public {
-        _userStakes[userAddress] = SafeMath.sub(_userStakes[userAddress], tokenAmount);
-        totalMntpHeld = SafeMath.sub(totalMntpHeld, tokenAmount);
+    function freeHeldTokens(address userAddress) onlyController public {
+        totalMntpHeld = SafeMath.sub(totalMntpHeld, _userStakes[userAddress]);
+		_userStakes[userAddress] = 0;
+		_rewardMntpPayouts[userAddress] = 0;
+        _rewardGoldPayouts[userAddress] = 0;
     }
 
     function addRewardPerShare(uint256 mntpReward, uint256 goldReward) onlyController public {
@@ -225,7 +227,7 @@ contract GoldmintPool {
         require(amount > 0);
         require(getMntpBalance() >= amount);
 		
-        core.freeHeldTokens(msg.sender, amount);
+        core.freeHeldTokens(msg.sender);
         mntpToken.transfer(msg.sender, amount);
         
         emit onUnholdStake(msg.sender, amount);
