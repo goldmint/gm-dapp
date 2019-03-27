@@ -157,12 +157,51 @@ contract PoolCore is PoolCommon {
 
 }
 
+contract StakeFreezer {
+
+    address public controllerAddress = address(0x0);
+
+    mapping(address => uint256) private _userStakes;
+
+    event onFreeze(address indexed userAddress, uint256 tokenAmount, bytes32 sumusAddress);
+    event onUnfreeze(address indexed userAddress, uint256 tokenAmount);
+
+
+    modifier onlyController() {
+        require(controllerAddress == msg.sender);
+        _;
+    }
+	
+    constructor() public {
+        controllerAddress = msg.sender;
+    }
+	
+    function setNewControllerAddress(address newAddress) onlyController public {
+        controllerAddress = newAddress;
+    }
+
+    function freezeUserStake(address userAddress, uint256 tokenAmount, bytes32 sumusAddress) onlyController public {
+        _userStakes[userAddress] = SafeMath.add(_userStakes[userAddress], tokenAmount);
+        emit onFreeze(userAddress, tokenAmount, sumusAddress);
+    }
+
+	function unfreezeUserStake(address userAddress, uint256 tokenAmount) onlyController public {
+        _userStakes[userAddress] = SafeMath.sub(_userStakes[userAddress], tokenAmount);
+        emit onUnfreeze(userAddress, tokenAmount);
+    }
+    
+    function getUserFrozenStake(address userAddress) public view returns(uint256) {
+        return _userStakes[userAddress];
+    }
+}
+
 
 contract GoldmintPool {
 
     address public tokenBankAddress = address(0x0);
 
     PoolCore public core;
+    StakeFreezer public stakeFreezer;
     IStdToken public mntpToken;
     IStdToken public goldToken;
 
@@ -194,8 +233,9 @@ contract GoldmintPool {
         _;
     }
 
-    constructor(address coreAddr, address tokenBankAddr) notNullAddress(coreAddr) notNullAddress(tokenBankAddr) public { 
+    constructor(address coreAddr, address tokenBankAddr, address stakeFreezerAddr) notNullAddress(coreAddr) notNullAddress(tokenBankAddr) public { 
         core = PoolCore(coreAddr);
+        stakeFreezer = StakeFreezer(stakeFreezerAddr);
         mntpToken = core.mntpToken();
         goldToken = core.goldToken();
         
@@ -204,6 +244,10 @@ contract GoldmintPool {
     
     function setTokenBankAddress(address addr) onlyAdministrator notNullAddress(addr) public {
         tokenBankAddress = addr;
+    }
+
+    function setStakeFreezerAddress(address addr) onlyAdministrator public {
+        stakeFreezer = StakeFreezer(addr);
     }
     
     function switchActive() onlyAdministrator public {
@@ -222,10 +266,16 @@ contract GoldmintPool {
     }
     
     function unholdStake() onlyActive public {
+        uint256 frozenAmount;
         uint256 amount = core.getUserStake(msg.sender);
         
         require(amount > 0);
         require(getMntpBalance() >= amount);
+        
+        if (stakeFreezer != address(0x0)) {
+            frozenAmount = stakeFreezer.getUserFrozenStake(msg.sender);
+        }
+        require(frozenAmount == 0);
 		
         core.freeHeldTokens(msg.sender);
         mntpToken.transfer(msg.sender, amount);
@@ -274,6 +324,24 @@ contract GoldmintPool {
 
         core.addUserPayouts(msg.sender, mntpRewardAmp, 0);
         core.addHeldTokens(msg.sender, mntpReward);
+
+        emit onHoldStake(msg.sender, mntpReward);
+    }
+
+    function freezeStake(bytes32 sumusAddress) onlyActive public {
+        require(stakeFreezer != address(0x0));
+
+        uint256 stake = core.getUserStake(msg.sender);
+        uint256 freezeAmount = SafeMath.sub(stake, stakeFreezer.getUserFrozenStake(msg.sender));
+
+        stakeFreezer.freezeUserStake(msg.sender, freezeAmount, sumusAddress);
+    }
+
+    function unfreezeUserStake(address userAddress) onlyActive onlyAdministratorOrManager public {
+        require(stakeFreezer != address(0x0));
+
+        uint256 amount = stakeFreezer.getUserFrozenStake(userAddress);
+        stakeFreezer.unfreezeUserStake(userAddress, amount);
     }
 
     //migrate to new controller contract in case of some mistake in the contract and transfer there all the tokens and eth. It can be done only after code review by Etherama developers.
@@ -283,6 +351,9 @@ contract GoldmintPool {
         isActive = false;
 
         core.setNewControllerAddress(newControllerAddr);
+        if (stakeFreezer != address(0x0)) {
+            stakeFreezer.setNewControllerAddress(newControllerAddr);
+        }
 
         uint256 mntpTokenAmount = getMntpBalance();
         uint256 goldTokenAmount = getGoldBalance();
@@ -315,7 +386,14 @@ contract GoldmintPool {
     
     function getUserStake() public view returns(uint256) {
         return core.getUserStake(msg.sender);
-    } 
+    }
+
+    function getUserFrozenStake() public view returns(uint256) {
+        if (stakeFreezer != address(0x0)) {
+            return stakeFreezer.getUserFrozenStake(msg.sender);
+        }
+        return 0;
+    }
 
     // HELPERS
 

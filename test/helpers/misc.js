@@ -982,6 +982,69 @@ function deployGoldmintPoolCoreContract(data,cb){
      });   
 }
 
+function deployGoldmintStakeFreezerContract(data,cb){
+     var file = './contracts/GoldmintPool.sol';
+     var contractName = ':StakeFreezer';
+ 
+     fs.readFile(file, function(err, result){
+         assert.equal(err,null);
+ 
+         var source = result.toString();
+         assert.notEqual(source.length,0);
+ 
+         assert.equal(err,null);
+ 
+         var output = solc.compile(source, 1); // 1 activates the optimiser
+ 
+         //console.log('OUTPUT: ');
+         //console.log(output.contracts);
+ 
+         var abi = JSON.parse(output.contracts[contractName].interface);
+         var bytecode = output.contracts[contractName].bytecode;
+         var tempContract = web3.eth.contract(abi);
+ 
+         var alreadyCalled = false;
+ 
+         tempContract.new(
+             {
+                 from: creator, 
+                 // should not exceed 5000000 for Kovan by default
+                 gas: 4995000,
+                 data: '0x' + bytecode
+             }, 
+             function(err, c){
+                if (alreadyCalled) return cb(null);
+                alreadyCalled = true;
+                 assert.equal(err, null);
+ 
+                 //console.log('TX HASH: ');
+                 //console.log(c.transactionHash);
+ 
+                 // TX can be processed in 1 minute or in 30 minutes...
+                 // So we can not be sure on this -> result can be null.
+                 web3.eth.getTransactionReceipt(c.transactionHash, function(err, result){
+                         //console.log('RESULT: ');
+                         //console.log(result);
+ 
+                         assert.equal(err, null);
+                         assert.notEqual(result, null);
+ 
+                         poolStakeFreezerContractAddress = result.contractAddress;
+                         poolStakeFreezerContract = web3.eth.contract(abi).at(poolStakeFreezerContractAddress);
+ 
+                         console.log('Goldmint Stake Freezer Contract address: ');
+                         console.log(poolStakeFreezerContractAddress);
+ 
+                         if(!alreadyCalled){
+                             alreadyCalled = true;
+ 
+                             return cb(null);
+                         }
+                 });
+             });
+     });   
+}
+
 function deployGoldmintPoolContract(data,cb){
      var file = './contracts/GoldmintPool.sol';
      var contractName = ':GoldmintPool';
@@ -1008,6 +1071,7 @@ function deployGoldmintPoolContract(data,cb){
          tempContract.new(
                poolCoreContractAddress,
                tokenBankAddress,
+               poolStakeFreezerContractAddress,
              {
                  from: creator, 
                  // should not exceed 5000000 for Kovan by default
