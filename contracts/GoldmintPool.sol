@@ -332,7 +332,10 @@ contract GoldmintPool {
         require(stakeFreezer != address(0x0));
 
         uint256 stake = core.getUserStake(msg.sender);
+		require(stake > 0);
+		
         uint256 freezeAmount = SafeMath.sub(stake, stakeFreezer.getUserFrozenStake(msg.sender));
+		require(freezeAmount > 0);
 
         stakeFreezer.freezeUserStake(msg.sender, freezeAmount, sumusAddress);
     }
@@ -341,6 +344,8 @@ contract GoldmintPool {
         require(stakeFreezer != address(0x0));
 
         uint256 amount = stakeFreezer.getUserFrozenStake(userAddress);
+		require(amount > 0);
+		
         stakeFreezer.unfreezeUserStake(userAddress, amount);
     }
 
