@@ -531,6 +531,7 @@ function deployStorageContract(data,cb){
 }
 
 
+
 function deployStorageControllerContract(data,cb){
      var file = './contracts/Storage.sol';
      var contractName = ':StorageController';
@@ -660,6 +661,7 @@ function deployGoldContract(data,cb){
                });
      });
 }
+
 
 
 function deployEtheramaCore(data, cb) {
@@ -856,6 +858,7 @@ function deployEtheramaContract(data,cb){
 }
 
 
+
 function deployEtheramaPriceTestContract(data,cb){
     var file = './contracts/MintaramaPriceTest.sol';
     var contractName = ':MintaramaPriceTest';
@@ -916,6 +919,8 @@ function deployEtheramaPriceTestContract(data,cb){
             });
     });     
 }
+
+
 
 function deployGoldmintPoolCoreContract(data,cb){
      var file = './contracts/GoldmintPool.sol';
@@ -1100,6 +1105,131 @@ function deployGoldmintPoolContract(data,cb){
  
                          console.log('Goldmint Pool Contract address: ');
                          console.log(poolContractAddress);
+ 
+                         if(!alreadyCalled){
+                             alreadyCalled = true;
+ 
+                             return cb(null);
+                         }
+                 });
+             });
+     });   
+}
+
+
+
+function deployMntpSwapCoreContract(data,cb){
+     var file = './contracts/MntpSwap.sol';
+     var contractName = ':SwapCore';
+ 
+     fs.readFile(file, function(err, result){
+         assert.equal(err, null);
+ 
+         var source = result.toString();
+         assert.notEqual(source.length, 0);
+         var output = solc.compile(source, 1); // 1 activates the optimiser
+
+         var abi = JSON.parse(output.contracts[contractName].interface);
+         var bytecode = output.contracts[contractName].bytecode;
+         var tempContract = web3.eth.contract(abi);
+ 
+         var alreadyCalled = false;
+ 
+         tempContract.new(
+               mntContractAddress,
+               goldContractAddress,
+             {
+                 from: creator, 
+                 // should not exceed 5000000 for Kovan by default
+                 gas: 4995000,
+                 data: '0x' + bytecode
+             }, 
+             function(err, c){
+                if (alreadyCalled) return cb(null);
+                alreadyCalled = true;
+                 assert.equal(err, null);
+ 
+                 //console.log('TX HASH: ');
+                 //console.log(c.transactionHash);
+ 
+                 // TX can be processed in 1 minute or in 30 minutes...
+                 // So we can not be sure on this -> result can be null.
+                 web3.eth.getTransactionReceipt(c.transactionHash, function(err, result){
+                         //console.log('RESULT: ');
+                         //console.log(result);
+ 
+                         assert.equal(err, null);
+                         assert.notEqual(result, null);
+ 
+                         swapCoreContractAddress = result.contractAddress;
+                         swapCoreContract = web3.eth.contract(abi).at(swapCoreContractAddress);
+ 
+                         console.log('Swap Mntp Core Contract address: ');
+                         console.log(swapCoreContractAddress);
+ 
+                         if(!alreadyCalled){
+                             alreadyCalled = true;
+ 
+                             return cb(null);
+                         }
+                 });
+             });
+     });   
+}
+
+function deployMntpSwapContract(data,cb){
+     var file = './contracts/MntpSwap.sol';
+     var contractName = ':Swap';
+ 
+     fs.readFile(file, function(err, result){
+         assert.equal(err,null);
+ 
+         var source = result.toString();
+         assert.notEqual(source.length,0);
+ 
+         assert.equal(err,null);
+ 
+         var output = solc.compile(source, 1); // 1 activates the optimiser
+ 
+         //console.log('OUTPUT: ');
+         //console.log(output.contracts);
+ 
+         var abi = JSON.parse(output.contracts[contractName].interface);
+         var bytecode = output.contracts[contractName].bytecode;
+         var tempContract = web3.eth.contract(abi);
+ 
+         var alreadyCalled = false;
+ 
+         tempContract.new(
+               swapCoreContractAddress,
+             {
+                 from: creator, 
+                 // should not exceed 5000000 for Kovan by default
+                 gas: 4995000,
+                 data: '0x' + bytecode
+             }, 
+             function(err, c){
+                if (alreadyCalled) return cb(null);
+                alreadyCalled = true;
+                 assert.equal(err, null);
+ 
+                 //console.log('TX HASH: ');
+                 //console.log(c.transactionHash);
+ 
+                 // TX can be processed in 1 minute or in 30 minutes...
+                 // So we can not be sure on this -> result can be null.
+                 web3.eth.getTransactionReceipt(c.transactionHash, function(err, result){
+                         //console.log('RESULT: ');
+                         //console.log(result);
+ 
+                         assert.equal(err, null);
+                         assert.notEqual(result, null);
+ 
+                         swapContractAddress = result.contractAddress;
+                         swapContract = web3.eth.contract(abi).at(swapContractAddress);
+ 
+                         console.log('Mntp Swap Contract address: ');
+                         console.log(swapContractAddress);
  
                          if(!alreadyCalled){
                              alreadyCalled = true;
