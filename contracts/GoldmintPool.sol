@@ -340,12 +340,11 @@ contract GoldmintPool {
         stakeFreezer.freezeUserStake(msg.sender, freezeAmount, sumusAddress);
     }
 
-	function unfreezeUserStake(address userAddress, uint256 amount) onlyActive onlyAdministratorOrManager public {
+    function unfreezeUserStake(address userAddress) onlyActive onlyAdministratorOrManager public {
         require(stakeFreezer != address(0x0));
 
-        uint256 maxAmount = stakeFreezer.getUserFrozenStake(userAddress);
-		require(maxAmount > 0);
-		require(maxAmount >= amount);
+        uint256 amount = stakeFreezer.getUserFrozenStake(userAddress);
+		require(amount > 0);
 		
         stakeFreezer.unfreezeUserStake(userAddress, amount);
     }
