@@ -21,7 +21,7 @@
     "ethereumjs-abi": "^0.6.4",
     "ethereumjs-testrpc": "^3.0.3",
     "express": "^4.13.4",
-    "express-jwt": "^3.3.0",
+    "express-jwt": "^6.0.0",
     "facebook-node-sdk": "^0.2.0",
     "http": "0.0.0",
     "iconv": "^2.1.11",
