@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "async": "^2.0.0-rc.3",
-    "bcrypt": "^0.8.5",
+    "bcrypt": "^5.0.0",
     "bignumber.js": "^3.0.1",
     "body-parser": "^1.17.1",
     "cluster": "^0.7.7",
